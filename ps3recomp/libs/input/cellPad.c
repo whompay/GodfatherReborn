@@ -533,6 +533,38 @@ void pad_rr_mouse_in(long dx, long dy, long wheel)
     if (s_rr_mode == 1) { InterlockedExchangeAdd(&s_rr_acc_dx, dx); InterlockedExchangeAdd(&s_rr_acc_dy, dy); if (wheel) InterlockedExchangeAdd(&s_rr_acc_wh, wheel); }
     g_pad_raw_ok = 1;
 }
+/* Pause-menu map: the map zooms with the RIGHT stick (up = in, down = out) and pans with the LEFT stick. For keyboard / mouse
+ * players the zoom comes from the mouse wheel / touchpad two-finger scroll (Raw Input wheel packets; touchpad deltas are below
+ * 120) and the + / - (main row and numpad) and PgUp / PgDn keys; the pan from WASD and the arrow keys. A controller on port 0
+ * keeps priority: its stick is only replaced while it is centred. */
+static int pad_zoom_key_dir(void)   /* +1 zoom in, -1 out, 0 none */
+{
+    const int up = ((GetAsyncKeyState(VK_OEM_PLUS) | GetAsyncKeyState(VK_ADD) | GetAsyncKeyState(VK_PRIOR)) & 0x8000) != 0;
+    const int dn = ((GetAsyncKeyState(VK_OEM_MINUS) | GetAsyncKeyState(VK_SUBTRACT) | GetAsyncKeyState(VK_NEXT)) & 0x8000) != 0;
+    return up == dn ? 0 : (up ? 1 : -1);
+}
+static void pad_menu_map_sticks(int mcur, int merge, const PadHostState* hs, long wheel, float* lx, float* ly, float* rx, float* ry,
+                                int* moving, int* looking)
+{
+    static unsigned long long until = 0; static int dir = 0;
+    if (!mcur) { until = 0; return; }
+    const unsigned long long t = GetTickCount64();
+    if (wheel) { dir = wheel > 0 ? 1 : -1; const unsigned long long b = until > t ? until : t;
+                 until = b + (unsigned long long)((wheel < 0 ? -wheel : wheel) * 130 / 120 + 20); if (until > t + 700) until = t + 700; }
+    int z = (t < until) ? dir : 0;
+    const int kd = pad_zoom_key_dir();
+    if (kd) z = kd;
+    const int pad_ry = merge && (hs->analog_ry > 148 || hs->analog_ry < 108), pad_l = merge && (hs->analog_lx > 148 || hs->analog_lx < 108 ||
+                                                                                                 hs->analog_ly > 148 || hs->analog_ly < 108);
+    if (z && !pad_ry) { *rx = 0.0f; *ry = z > 0 ? -127.0f : 127.0f; *looking = 1; }   /* PS3 stick: up = 0 */
+    const int kl = (GetAsyncKeyState('A') | GetAsyncKeyState(VK_LEFT)) & 0x8000, kr = (GetAsyncKeyState('D') | GetAsyncKeyState(VK_RIGHT)) & 0x8000;
+    const int ku = (GetAsyncKeyState('W') | GetAsyncKeyState(VK_UP)) & 0x8000,    kb = (GetAsyncKeyState('S') | GetAsyncKeyState(VK_DOWN)) & 0x8000;
+    if (!pad_l && ((!kl != !kr) || (!ku != !kb))) {
+        *lx = kl && !kr ? -127.0f : (kr && !kl ? 127.0f : 0.0f);
+        *ly = ku && !kb ? -127.0f : (kb && !ku ? 127.0f : 0.0f);
+        *moving = 1;
+    }
+}
 static int rr_edge(const RRFrame* a, const PadHostState* ga, const RRFrame* b, const PadHostState* gb)
 {
     if (memcmp(a->keys, b->keys, sizeof a->keys) || ((a->flags ^ b->flags) & 1)) return 1;
@@ -2104,6 +2136,7 @@ static void pad_poll_kbm_generic(int merge)
         if ((fa_gun || gun_hol) && vk == VK_RBUTTON) continue;   /* v1044A: RMB = free aim with a gun (v1053M: also a holstered one) */
         if (vk == 'V' && g_pad_camcycle_fn) continue;   /* v1046V: V = camera view (tap) / L3 (hold), below */
         if (mcur && s_menu_qe && (vk == 'Q' || vk == 'E')) continue;   /* v1107Z: Q / E = tabs in menus, below */
+        if (mcur && (vk == VK_LCONTROL || vk == VK_RCONTROL || vk == VK_CONTROL)) continue;   /* a touchpad pinch injects Ctrl: not a button in the menus */
         if (KD(vk)) btns |= s_kbm_binds[i].btn;
     }
     { extern volatile int g_gf_menu_want; g_gf_menu_want = mcur; }   /* v1107V: frame probe finds the menu */
@@ -2114,7 +2147,7 @@ static void pad_poll_kbm_generic(int merge)
         if (KD(VK_LBUTTON)) s_lmb_block = 1;   /* a click that closes the menu is not a shot */
         if (KD(VK_RBUTTON)) btns |= CELL_PAD_CTRL_CIRCLE;
         /* v1107X wheel: one d-pad pulse per notch through the same paced queue (was a 70 ms hold) */
-        if (raw_wheel && !s_mm_drive) { const int notches = (int)((raw_wheel < 0 ? -raw_wheel : raw_wheel) + 119) / 120;
+        if (0 && raw_wheel && !s_mm_drive) { const int notches = (int)((raw_wheel < 0 ? -raw_wheel : raw_wheel) + 119) / 120;
             mm_push(raw_wheel > 0 ? CELL_PAD_CTRL_UP : CELL_PAD_CTRL_DOWN, notches < 1 ? 1 : notches); }
     } else pad_menu_reset();
     if (gun_hol && KD(VK_RBUTTON) && !ov_mouse) {   /* v1053M: draw the selected gun; free aim follows (v1053L latch gap) */
@@ -2403,7 +2436,7 @@ static void pad_poll_kbm_generic(int merge)
     if (KD('W') && !s_car) ly -= 1.0f;   /* v1053D: W / S are gas / brake in a car */
     if (KD('S') && !s_car) ly += 1.0f;
     }
-    const int moving = (lx != 0.0f || ly != 0.0f);
+    int moving = (lx != 0.0f || ly != 0.0f);
     /* v1115W (user: "toggle slow walk with CTRL, not hold; sprinting cancels it"): a Ctrl PRESS toggles walking
      * (PAD_KBM_WALK deflection) on / off; sprinting (Cross held while moving = Shift by default) turns it off.
      * Ctrl used for an X+Ctrl move does not toggle: no toggle while X (the motion key) is held, and a toggle is
@@ -2550,7 +2583,7 @@ static void pad_poll_kbm_generic(int merge)
       if (sdir && gt < s_until) { cmb_rs = 1; cmb_rx = (float)sdir * 127.0f; cmb_ry = 0.0f; }
     }
     if (cmb_rs) { rx = cmb_rx; ry = cmb_ry; s_vx = s_vy = 0.0f; }   /* v1042X: locked-on melee owns the right stick */
-    const int looking = (rx != 0.0f || ry != 0.0f) || cmb_rs == 1;
+    int looking = (rx != 0.0f || ry != 0.0f) || cmb_rs == 1;
     if (btns || moving || clicks || (raw_dx < 0 ? -raw_dx : raw_dx) + (raw_dy < 0 ? -raw_dy : raw_dy) > 3) pad_note_device(1);
     else if (g_input_kbm < 0 && !merge) pad_note_device(1);
     { static u16 kb_prev = 0; const u16 kb = (u16)(btns & MM_MASK);   /* v1114P: a new key press beats the pointer */
@@ -2559,6 +2592,7 @@ static void pad_poll_kbm_generic(int merge)
           static int nl = 0; if (nl < 20) { nl++; printf("[cellPad] v1114P menu: key press -> keyboard has the menu (pointer pulses dropped)\n"); fflush(stdout); } }
       kb_prev = kb; }
     if (s_mm_drive) btns = (u16)((btns & ~MM_MASK) | s_mm_out | s_mm_hold);   /* v1107X: the menu pointer owns d-pad + Cross */
+    pad_menu_map_sticks(mcur, merge, hs, raw_wheel, &lx, &ly, &rx, &ry, &moving, &looking);
     if (merge) {
         hs->buttons |= btns;
         if (moving)  { hs->analog_lx = pad_axis(lx); hs->analog_ly = pad_axis(ly); }
