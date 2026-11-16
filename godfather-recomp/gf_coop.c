@@ -845,7 +845,8 @@ void gf_coop_shutdown(void)
 #include <stdarg.h>
 static void coop_note(const char* fmt, ...)
 {
-    char t[128]; va_list ap; va_start(ap, fmt); vsnprintf(t, sizeof t, fmt, ap); va_end(ap);
+    extern const char* ui_tr(const char* en);   /* ui_i18n.c: game language */
+    char t[128]; va_list ap; va_start(ap, fmt); vsnprintf(t, sizeof t, ui_tr(fmt), ap); va_end(ap);
     if (s_cs_init) { EnterCriticalSection(&s_cs); snprintf(s_msg, sizeof s_msg, "%s", t); LeaveCriticalSection(&s_cs); }
     printf("[coop] v1119M %s\n", t); fflush(stdout);
 }

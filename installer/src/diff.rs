@@ -456,6 +456,31 @@ fn parse_patch(patch: &[u8]) -> Result<Vec<Hunk<'_>>, String> {
 }
 
 pub fn apply_patch(old: &[u8], patch: &[u8]) -> Result<Vec<u8>, String> {
+    match apply_patch_raw(old, patch) {
+        // The patch's own line endings were changed in transit (git autocrlf / a checkout on another OS): apply it
+        // with base and patch both in LF, then give the result the line endings it was meant to have.
+        Err(e) => {
+            let target = if patch.starts_with(EOL_LF) {
+                Some(Eol::Lf)
+            } else if patch.starts_with(EOL_CRLF) {
+                Some(Eol::Crlf)
+            } else {
+                dominant_eol(old)
+            };
+            let Some(target) = target else { return Err(e) };
+            let body = patch
+                .strip_prefix(EOL_LF)
+                .or_else(|| patch.strip_prefix(EOL_CRLF))
+                .unwrap_or(patch);
+            apply_patch_raw(&convert_eol(old, Eol::Lf), &convert_eol(body, Eol::Lf))
+                .map(|r| convert_eol(&r, target))
+                .map_err(|_| e)
+        }
+        r => r,
+    }
+}
+
+fn apply_patch_raw(old: &[u8], patch: &[u8]) -> Result<Vec<u8>, String> {
     let converted;
     let old = if patch.starts_with(EOL_LF) {
         converted = convert_eol(old, Eol::Lf);

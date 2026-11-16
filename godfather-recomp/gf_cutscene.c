@@ -105,9 +105,14 @@ static int is_seq(uint32_t o) { return ea_ok(o) && rd32(o) == SEQ_VT; }
  * sub-sequence still runs, each finishing in a frame or two under the Trinity dt boost (GF_SKIP_TRINITY_DT), behind
  * the black skip screen; the audio-end trick runs when the cutscene really reaches its end. */
 static int s_allshots = -1;
+static unsigned long long s_prog_ms;   /* last fast-shot step (stall diagnostics) */
 static int allshots(void)
 {
-    if (s_allshots < 0) { const char* e = getenv("GF_SKIP_ALLSHOTS"); s_allshots = !(e && *e == '0');
+    if (s_allshots < 0) { const char* e = getenv("GF_SKIP_ALLSHOTS");
+        /* (A language pack once defaulted to the direct jump here; that skipped the event scripts and froze the
+         * mission after the mobface screen, so the fast replay stays the default everywhere.) */
+        extern const char* ps3_fs_lang_pack_dir(void);
+        (void)ps3_fs_lang_pack_dir; s_allshots = !(e && *e == '0');
         printf("[skip-seq] v1049K skip plays every shot fast (all events fire): %s (GF_SKIP_ALLSHOTS)\n", s_allshots ? "ON" : "off"); fflush(stdout); }
     return s_allshots;
 }
@@ -146,8 +151,9 @@ int gf_seq_jump_to_end(uint64_t self)
             s_jump_ms = now_ms();
             ps3_fs_igc_end_audio();
             SKIPLOG("[skip-seq] v1049K seq 0x%08X played all %u shot(s) fast -- ending\n", o, cnt);
-        } else if (ea_ok(begin) && cnt <= 256 && cur >= begin)
-            SKIPLOG("[skip-seq] v1049K seq 0x%08X fast shot %u/%u\n", o, (cur - begin) / 12u + 1u, cnt);
+        } else if (ea_ok(begin) && cnt <= 256 && cur >= begin) {
+            s_prog_ms = now_ms();
+            SKIPLOG("[skip-seq] v1049K seq 0x%08X fast shot %u/%u\n", o, (cur - begin) / 12u + 1u, cnt); }
         return 0;
     }
     if (!ea_ok(begin) || cnt > 256 || cur < begin || cur >= end) return 0;   /* already past the last shot */
@@ -163,6 +169,11 @@ double gf_trinity_dt(double dt)
 {
     if (!skipping()) return dt;
     static int n = 0;
+    static unsigned long long stall_t = 0; static int stall_logs = 0;   /* a fast replay that stops moving: log what is left */
+    const unsigned long long nowm = now_ms();
+    if (!s_prog_ms || nowm - s_prog_ms < 4000ull) stall_t = 0;
+    else if (stall_logs < 12 && nowm - stall_t >= 2000ull) { stall_t = nowm; stall_logs++; n = 39;
+        SKIPLOG("[skip-seq] fast replay stalled %.1f s -- playback slots:\n", (nowm - s_prog_ms) / 1000.0); }
     if (n < 40) {   /* what the skip is chewing through (first frames only) */
         n++;
         for (int i = 0; i < TRI_NSLOTS; i++) {

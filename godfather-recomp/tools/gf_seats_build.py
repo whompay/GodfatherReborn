@@ -32,7 +32,7 @@ def scan_small(f):
     return ({k: box(v) for k, v in c_.items()}, h_, {k: box(v[0]) for k, v in n_.items()}, b_, [(h, inst) for ff, h, inst in r_])
 def files_of(root):
     files = []
-    for r in root.split(';'): files += sorted(glob.glob(os.path.join(r, '**', '*.str'), recursive=True))
+    for r in root.split(';'): files += sorted(glob.glob(os.path.join(glob.escape(r), '**', '*.str'), recursive=True))
     return [f for f in files if 'world_terrain' in f.replace('\\', '/') or os.path.basename(f).endswith('_global.str')]
 def scan_batch(root, i0, i1, outp):
     import pickle

@@ -11,7 +11,7 @@ import gf_seats_build as sb
 SHOP = re.compile(r'smoke|quack|bakery|florist|butcher|liquor|liqour|bar_|nightclub|^rest|_rest', re.I)
 def interiors(wt):
     seen = {}
-    for f in sorted(glob.glob(os.path.join(wt, '**', '*.str'), recursive=True)):
+    for f in sorted(glob.glob(os.path.join(glob.escape(wt), '**', '*.str'), recursive=True)):
         rel = os.path.relpath(f, wt).replace('\\', '/').split('/')
         if len(rel) < 3: continue
         leaf = rel[2][:-4] if rel[2].endswith('.str') else rel[2]
@@ -62,7 +62,14 @@ def box_of(files):
     return lo, hi, n[0]
 if __name__ == '__main__':
     wt, outp = sys.argv[1], sys.argv[2]
-    items = interiors(wt)
+    # one world_terrain folder, several separated by ';', or the godfather_v4 folder (all its */world_terrain)
+    roots = [r for r in wt.split(';') if r]
+    if len(roots) == 1 and os.path.basename(os.path.normpath(roots[0])) != 'world_terrain':
+        roots = sorted(glob.glob(os.path.join(glob.escape(roots[0]), '*', 'world_terrain'))) or roots
+    merged = {}
+    for r in roots:
+        for leaf, files in interiors(r): merged.setdefault(leaf, []).extend(files)
+    items = sorted(merged.items())
     i0, i1 = (int(sys.argv[3]), int(sys.argv[4])) if len(sys.argv) > 4 else (0, len(items))
     with open(outp, 'a' if i0 > 0 else 'w') as f:
         if i0 == 0: f.write('# v1110S tools/gf_shops_build.py: name x0 y0 z0 x1 y1 z1 parts (world box of the interior collision)\n')

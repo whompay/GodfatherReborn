@@ -880,11 +880,24 @@ static void hk_opensub(ppu_context* c)
 }
 /* label: "Leaderboards" <-> "Co-op" (v1119M; was "PC Settings" -- the page now has CO-OP and PC SETTINGS tabs). The new text is
  * NUL-padded to the 12 + NUL slot. */
-static const char k_lbl_new[13] = "Co-op\0\0\0\0\0\0\0";   /* 13 bytes */
+/* The game language's word (ui_i18n.c): "Leaderboards" -> "Co-op", Spanish "Clasificaciones" -> "Cooperativo". */
+extern const char* ui_tr(const char* en);
+static char s_lbl_old[24], s_lbl_new[24]; static size_t s_lbl_n;   /* label bytes incl. NUL; new text NUL padded */
+static void lbl_words(void)
+{
+    if (s_lbl_n) return;
+    const char* o = ui_tr("Leaderboards"); const char* w = ui_tr("Co-op");
+    if (strlen(o) >= sizeof s_lbl_old || strlen(w) > strlen(o)) { o = "Leaderboards"; w = "Co-op"; }
+    s_lbl_n = strlen(o) + 1;
+    memset(s_lbl_old, 0, sizeof s_lbl_old); memset(s_lbl_new, 0, sizeof s_lbl_new);
+    memcpy(s_lbl_old, o, s_lbl_n); memcpy(s_lbl_new, w, strlen(w));
+}
 static uint32_t s_lbl[8]; static int s_nlbl = 0;
 static void lbl_find(void)
 {
-    static const char want[] = "\0Leaderboards\0", alt[] = "\0Co-op\0\0\0\0\0\0\0\0";   /* both 14 bytes */
+    lbl_words();
+    char want[32], alt[32]; const size_t wn = s_lbl_n + 1;   /* "\0" + label + "\0" */
+    want[0] = alt[0] = 0; memcpy(want + 1, s_lbl_old, s_lbl_n); memcpy(alt + 1, s_lbl_new, s_lbl_n);
     s_nlbl = 0;
     for (uint64_t ea = 0x20000000ull; ea < 0xF0000000ull && s_nlbl < 8; ) {
         MEMORY_BASIC_INFORMATION mi;
@@ -897,8 +910,8 @@ static void lbl_find(void)
         if (mi.State == MEM_COMMIT && !(mi.Protect & PAGE_GUARD) && (pr == PAGE_READWRITE || pr == PAGE_EXECUTE_READWRITE)) {
             __try {
                 const uint8_t* b = vm_base + rs; const size_t len = (size_t)(re - rs);
-                for (size_t i = 0; i + 15 <= len && s_nlbl < 8; i++)
-                    if ((b[i + 1] == 'L' || b[i + 1] == 'C') && (!memcmp(b + i, want, 14) || !memcmp(b + i, alt, 14))) s_lbl[s_nlbl++] = (uint32_t)(rs + i + 1);
+                for (size_t i = 0; i + wn + 1 <= len && s_nlbl < 8; i++)
+                    if ((b[i + 1] == (uint8_t)want[1] || b[i + 1] == (uint8_t)alt[1]) && (!memcmp(b + i, want, wn) || !memcmp(b + i, alt, wn))) s_lbl[s_nlbl++] = (uint32_t)(rs + i + 1);
             } __except (EXCEPTION_EXECUTE_HANDLER) { }
         }
         ea = re;
@@ -908,8 +921,8 @@ static void lbl_set(int pc)
 {
     for (int i = 0; i < s_nlbl; i++) {
         uint8_t* p = vm_base + s_lbl[i];
-        if (memcmp(p, "Leaderboards", 13) && memcmp(p, k_lbl_new, 13)) continue;   /* memory reused */
-        if (pc) memcpy(p, k_lbl_new, 13); else memcpy(p, "Leaderboards", 13);
+        if (memcmp(p, s_lbl_old, s_lbl_n) && memcmp(p, s_lbl_new, s_lbl_n)) continue;   /* memory reused */
+        memcpy(p, pc ? s_lbl_new : s_lbl_old, s_lbl_n);
     }
 }
 static DWORD WINAPI lbl_thread(LPVOID arg)
@@ -924,7 +937,7 @@ static DWORD WINAPI lbl_thread(LPVOID arg)
                 if (!s_nlbl) { last_find = t; lbl_find(); printf("[pcsettings] \"Leaderboards\" label: %d cop%s\n", s_nlbl, s_nlbl == 1 ? "y" : "ies"); fflush(stdout); }
                 if (s_nlbl) { lbl_set(1); state = 1; }
             } else if (ing && state == 1) {
-                for (int i = 0; i < s_nlbl; i++) if (memcmp(vm_base + s_lbl[i], k_lbl_new, 12)) { s_nlbl = 0; state = -1; break; }   /* reloaded */
+                for (int i = 0; i < s_nlbl; i++) if (memcmp(vm_base + s_lbl[i], s_lbl_new, s_lbl_n - 1)) { s_nlbl = 0; state = -1; break; }   /* reloaded */
             } else if (!ing && state == 1) { lbl_set(0); state = 0; }
         } __except (EXCEPTION_EXECUTE_HANDLER) { s_nlbl = 0; state = -1; }
     }
@@ -988,10 +1001,12 @@ void gf_mainmenu_uix(uint64_t stream)
         p += sz;
     }
     if (!tit || memcmp(vm_base + tit, "frontend", 9)) return;   /* some other movie */
-    static const char k_trace[] = "**********screen_stub.as**********", k_label[] = "Quit to Desktop";
+    static const char k_trace[] = "**********screen_stub.as**********";
+    extern const char* ui_tr(const char* en);
+    char k_label[sizeof k_trace]; { const char* l = ui_tr("Quit to Desktop"); if (strlen(l) >= sizeof k_label) l = "Quit to Desktop"; strcpy(k_label, l); }   /* game language (ui_i18n.c) */
     if (!A || !C || C <= A || C - A > 0x10000u) { printf("[quitmenu] v1058Q frontend.uix without apt/const data -- not patched\n"); fflush(stdout); return; }
     /* already patched (buffer re-parsed)? */
-    if (rd32(A + 0x161C) == 10 && !memcmp(vm_base + C + 0x135C, k_label, sizeof k_label)) { s_qd_patched = 1; return; }
+    if (rd32(A + 0x161C) == 10 && !memcmp(vm_base + C + 0x135C, k_label, strlen(k_label) + 1)) { s_qd_patched = 1; return; }
     static const uint32_t k_list[10] = { 206, 207, 208, 209, 210, 211, 212, 213, 214, 215 };
     int good = !memcmp(vm_base + A, "Apt Data:7\x1a", 11) && !memcmp(vm_base + C, "Apt constant file\x1a", 18)
             && rd32(C + 0x18) == 0x218u
@@ -1010,7 +1025,7 @@ void gf_mainmenu_uix(uint64_t stream)
     for (int i = 0; i < 10; i++) wr32(A + 0x2594 + 4u * (uint32_t)i, k_new[i]);
     wr32(A + 0x161C, 10);
     wr32(C + 0x24 + 8 * 201, 7); wr32(C + 0x24 + 8 * 214, 7);
-    memset(vm_base + C + 0x135C, 0, sizeof k_trace); memcpy(vm_base + C + 0x135C, k_label, sizeof k_label);
+    memset(vm_base + C + 0x135C, 0, sizeof k_trace); memcpy(vm_base + C + 0x135C, k_label, strlen(k_label) + 1);
     s_qd_patched = 1;
     printf("[quitmenu] v1058Q main menu: QUIT TO DESKTOP added under BONUS VIDEOS (apt 0x%08X)\n", A); fflush(stdout);
 }

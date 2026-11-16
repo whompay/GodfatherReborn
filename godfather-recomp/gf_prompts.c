@@ -39,13 +39,45 @@ static int gfp_want_kbm(void)
     const int c = g_ui_kbm_glyphs >= 0 ? g_ui_kbm_glyphs : s_cfg;
     return c == 2 || (c != 0 && g_input_kbm > 0);
 }
-static const char* gfp_text(int idx, int kbm) { return kbm ? g_gf_prompts[idx].kbm : g_gf_prompts[idx].pad; }
+/* A language pack's own prompts (<pack>/gf_prompts.txt, tools/gf_prompts_lang.py): indices GFP_N.. */
+#define GFP_EXT_MAX 128
+static char* s_ext[GFP_EXT_MAX][3]; static size_t s_ext_len[GFP_EXT_MAX]; static int s_next = 0;
+extern const char* ps3_fs_lang_pack_dir(void);   /* sys_fs.c */
+static char* gfp_unhex(const char* h, size_t n)
+{
+    char* o = (char*)malloc(n / 2 + 1); if (!o) return NULL;
+    for (size_t i = 0; i < n / 2; i++) { unsigned v = 0; sscanf(h + 2 * i, "%2x", &v); o[i] = (char)v; }
+    o[n / 2] = 0; return o;
+}
+static void gfp_load_ext(void)
+{
+    const char* lp = ps3_fs_lang_pack_dir(); if (!lp) return;
+    char path[MAX_PATH + 64]; snprintf(path, sizeof path, "%s\\gf_prompts.txt", lp);
+    FILE* f = fopen(path, "rb"); if (!f) return;
+    static char l[8192];
+    while (s_next < GFP_EXT_MAX && fgets(l, sizeof l, f)) {
+        if (l[0] == '#') continue;
+        char* t1 = strchr(l, '\t'); char* t2 = t1 ? strchr(t1 + 1, '\t') : NULL; if (!t2) continue;
+        char* e = t2 + 1; while (*e && *e != '\r' && *e != '\n') e++;
+        char* o = gfp_unhex(l, (size_t)(t1 - l)); char* p = gfp_unhex(t1 + 1, (size_t)(t2 - t1 - 1)); char* k = gfp_unhex(t2 + 1, (size_t)(e - t2 - 1));
+        if (!o || !p || !k || strlen(p) > strlen(o) || strlen(k) > strlen(o)) { free(o); free(p); free(k); continue; }
+        s_ext[s_next][0] = o; s_ext[s_next][1] = p; s_ext[s_next][2] = k; s_ext_len[s_next] = strlen(o); s_next++;
+    }
+    fclose(f);
+    printf("[prompts] %d prompts from the language pack (%s)\n", s_next, path);
+}
+static const char* gfp_text(int idx, int kbm)
+{
+    if (idx >= GFP_N) return s_ext[idx - GFP_N][kbm ? 2 : 1];
+    return kbm ? g_gf_prompts[idx].kbm : g_gf_prompts[idx].pad;
+}
+static size_t gfp_len(int idx) { return idx >= GFP_N ? s_ext_len[idx - GFP_N] : g_gf_prompts[idx].len; }
 
 /* write variant `kbm` of prompt idx at ea, NUL padded to the original length */
 static void gfp_write(uint32_t ea, int idx, int kbm)
 {
     const char* t = gfp_text(idx, kbm);
-    const size_t n = strlen(t), len = g_gf_prompts[idx].len;
+    const size_t n = strlen(t), len = gfp_len(idx);
     uint8_t* p = vm_base + ea;
     memcpy(p, t, n);
     memset(p + n, 0, len - n);
@@ -62,6 +94,8 @@ static int gfp_match(const uint8_t* s, size_t len)
 {
     for (int i = 0; i < GFP_N; i++)
         if (g_gf_prompts[i].len == len && !memcmp(g_gf_prompts[i].orig, s, len)) return i;
+    for (int i = 0; i < s_next; i++)
+        if (s_ext_len[i] == len && !memcmp(s_ext[i][0], s, len)) return GFP_N + i;
     return -1;
 }
 
@@ -74,6 +108,7 @@ static void gfp_site_add(uint32_t ea, int idx, int kbm)
 /* Horspool scan of one committed range [b, b+n) for the needle; returns strings patched */
 /* v1042X: second needle -- the melee / grab prompts that name the right stick (gf_prompts_table.h MELEE entries) */
 static const uint8_t k_nd_sixaxis[] = { 'S','I','X','A','X','I','S',0xAC,' ','w','i','r','e','l','e','s','s' };
+static const uint8_t k_nd_sixaxis_any[] = { 'S','I','X','A','X','I','S',0xAC };   /* language-pack prompts */
 static const uint8_t k_nd_rstick[] = { '[','b','=','R','s','t','i','c','k',']' };
 static int gfp_scan_range(uint8_t* b, size_t n, int kbm, int* unknown, const uint8_t* nd, size_t m)
 {
@@ -124,6 +159,7 @@ static int gfp_scan_all(int kbm, int* unknown, size_t* scanned)
         if (readable && !rsx) {
             __try { got += gfp_scan_range(vm_base + rs, (size_t)(re - rs), kbm, unknown, k_nd_sixaxis, sizeof k_nd_sixaxis);
                     got += gfp_scan_range(vm_base + rs, (size_t)(re - rs), kbm, unknown, k_nd_rstick, sizeof k_nd_rstick);
+                    if (s_next) got += gfp_scan_range(vm_base + rs, (size_t)(re - rs), kbm, unknown, k_nd_sixaxis_any, sizeof k_nd_sixaxis_any);
                     *scanned += (size_t)(re - rs); }
             __except (EXCEPTION_EXECUTE_HANDLER) { }
         }
@@ -755,6 +791,7 @@ void gf_prompts_start(void)
     const char* e = getenv("GF_PROMPTS");
     if (e && *e == '0') { printf("[prompts] v1042G SIXAXIS prompt rewrite off (GF_PROMPTS=0)\n"); return; }
     e = getenv("KBM_GLYPHS"); if (e && *e) s_cfg = atoi(e);
+    gfp_load_ext();
     printf("[prompts] v1042G SIXAXIS prompt rewrite ON (%d prompts; KBM_GLYPHS=%d)\n", GFP_N, s_cfg);
     fflush(stdout);
     HANDLE h = CreateThread(NULL, 256u << 10, gfp_thread, NULL, 0, NULL);

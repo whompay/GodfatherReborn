@@ -89,10 +89,58 @@ static void fs_normalize_sep(char* p) {
  *
  * All three path translators call this -- sys_fs, cellFs and ppu_fs each do
  * their own translation (see docs), and a guest path can arrive at any of them. */
+/* Language pack: a folder mirroring USRDIR that holds only the localisation files of another regional disc
+ * (text tables, voices, localised movies -- built by the installer). A file present there replaces the base
+ * disc's file of the same USRDIR-relative path; everything else comes from the base disc.
+ * PS3_LANG_PACK=<dir>, or <exe dir>/../langpack/<code> for PS3_LANG = spanish / french / italian / german. */
+#if defined(_WIN32) && !defined(_WINDOWS_)
+__declspec(dllimport) unsigned long __stdcall GetModuleFileNameA(void* mod, char* buf, unsigned long n);
+#endif
+static const char* lang_pack_dir(void)
+{
+    static int init = 0; static char dir[600];
+    if (init) return dir[0] ? dir : NULL;
+    init = 1; dir[0] = 0;
+    const char* e = getenv("PS3_LANG_PACK");
+    struct stat st;
+    if (e && *e) { if (stat(e, &st) == 0) snprintf(dir, sizeof dir, "%s", e); }
+#ifdef _WIN32
+    else {
+        const char* l = getenv("PS3_LANG"); const char* code = NULL;
+        if (l) { if (!strcmp(l, "spanish")) code = "es"; else if (!strcmp(l, "french")) code = "fr";
+                 else if (!strcmp(l, "italian")) code = "it"; else if (!strcmp(l, "german")) code = "de"; }
+        char exe[520];
+        if (code && GetModuleFileNameA(NULL, exe, sizeof exe)) {
+            char* s = strrchr(exe, '\\'); char* s2 = strrchr(exe, '/'); if (s2 > s) s = s2; if (s) *s = 0;
+            char cand[600]; snprintf(cand, sizeof cand, "%s/../langpack/%s", exe, code);
+            if (stat(cand, &st) == 0) snprintf(dir, sizeof dir, "%s", cand);
+        }
+    }
+#endif
+    if (dir[0]) fprintf(stderr, "[fs] language pack: %s\n", dir);
+    return dir[0] ? dir : NULL;
+}
+
+/* The language pack folder in use, or NULL (port code that opens game files itself, e.g. gf_dialogue.c). */
+const char* ps3_fs_lang_pack_dir(void) { return lang_pack_dir(); }
+
 void ps3_vfs_ps3game_fallback(char* path, size_t cap)
 {
     struct stat st;
-    if (!path || !*path || stat(path, &st) == 0)
+    if (!path || !*path) return;
+    {   const char* lp = lang_pack_dir();
+        if (lp) {
+            const char* u = strstr(path, "/USRDIR/"); if (!u) u = strstr(path, "\\USRDIR\\");
+            if (u) {
+                char alt[1024];
+                if (snprintf(alt, sizeof alt, "%s/%s", lp, u + 8) < (int)sizeof alt) {
+                    fs_normalize_sep(alt);
+                    if (stat(alt, &st) == 0) { snprintf(path, cap, "%s", alt); return; }
+                }
+            }
+        }
+    }
+    if (stat(path, &st) == 0)
         return;
     char* p = strstr(path, "/PS3_GAME/");
     if (!p) {

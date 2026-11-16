@@ -47,6 +47,7 @@ const uiov_trainer_api* volatile g_uiov_trainer = 0;
 #define UIOV_FRAMES    3
 
 typedef struct { float x, y, u, v, r, g, b, a; } UVert;
+extern const char* ui_tr(const char* en);   /* ui_i18n.c: the port's text in the game language */
 typedef struct { unsigned code; short x, y, w, h, xo, yo, adv, pad; } UGlyph;
 
 /* ---------------- font asset ---------------- */
@@ -1764,7 +1765,7 @@ static void build_watermark(void)
 }
 static void build_hint(void)
 {
-    const char* t = "Back   Settings & Quit";
+    const char* t = ui_tr("Back   Settings & Quit");
     float sz = 22.0f, w = text_width(t, (int)strlen(t), sz), x1 = s_vw - 40.0f, x0 = x1 - w - 32.0f, y0 = 30.0f, y1 = y0 + 40.0f;   /* top-right: the game's pause screen keeps that black bar empty */
     float c0[4], c1[4], wt[4];
     rgba(c0, 0, 0, 0, 0.55f); rect(x0, y0, x1, y1, c0, c0, 0);
@@ -1781,16 +1782,30 @@ static void build_hint(void)
 static float GF_RED[4] = { 0.70f, 0.09f, 0.08f, 1.0f }, GF_ITEM[4] = { 0.80f, 0.80f, 0.80f, 1.0f },
              GF_DIM[4] = { 0.50f, 0.50f, 0.50f, 1.0f }, GF_TITLE[4] = { 0.09f, 0.09f, 0.09f, 1.0f },
              GF_GOLD[4] = { 0.86f, 0.70f, 0.34f, 1.0f }, GF_PROMPT[4] = { 0.86f, 0.86f, 0.86f, 1.0f };
-static void gf_upper(char* d, size_t n, const char* s) { size_t i = 0; for (; s[i] && i + 1 < n; i++) d[i] = (char)toupper((unsigned char)s[i]); d[i] = 0; }
+/* upper case, translated first; UTF-8 aware (Latin-1 letters: U+00E0..U+00FE -> U+00C0..U+00DE, not U+00F7) */
+static void gf_upper(char* d, size_t n, const char* s)
+{
+    s = ui_tr(s); size_t i = 0;
+    for (; s[i] && i + 1 < n; i++) {
+        const unsigned char c = (unsigned char)s[i];
+        if (c == 0xC3 && i + 2 < n && s[i + 1]) { const unsigned char c2 = (unsigned char)s[i + 1];
+            d[i] = (char)c; d[i + 1] = (char)((c2 >= 0xA0 && c2 <= 0xBE && c2 != 0xB7) ? c2 - 0x20 : c2); i++; continue; }
+        d[i] = (char)(c < 0x80 ? toupper(c) : c);
+    }
+    d[i] = 0;
+}
+static int u8len(const char* s) { const unsigned char c = (unsigned char)*s; int k = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+                                  for (int j = 1; j < k; j++) if (!s[j]) return j; return k; }
 static float gf_sp_w(const char* s, float size, float sp)
 {
-    float w = 0.0f; int n = (int)strlen(s);
-    for (int i = 0; i < n; i++) w += text_width(s + i, 1, size) + (i + 1 < n ? sp : 0.0f);
+    s = ui_tr(s); float w = 0.0f; int n = (int)strlen(s);
+    for (int i = 0; i < n; ) { const int k = u8len(s + i); w += text_width(s + i, k, size) + (i + k < n ? sp : 0.0f); i += k; }
     return w;
 }
 static void gf_sp(const char* s, float x, float y, float size, float sp, const float c[4])
 {
-    for (int i = 0; s[i]; i++) { text_draw(s + i, 1, x, y, size, c); x += text_width(s + i, 1, size) + sp; }
+    s = ui_tr(s);
+    for (int i = 0; s[i]; ) { const int k = u8len(s + i); text_draw(s + i, k, x, y, size, c); x += text_width(s + i, k, size) + sp; i += k; }
 }
 static void gf_sp_c(const char* s, float cx, float y, float size, float sp, const float c[4]) { gf_sp(s, cx - gf_sp_w(s, size, sp) * 0.5f, y, size, sp, c); }
 static void gf_sp_r(const char* s, float xr, float y, float size, float sp, const float c[4]) { gf_sp(s, xr - gf_sp_w(s, size, sp), y, size, sp, c); }
@@ -2191,20 +2206,22 @@ static int sf_ok(void) { return glyph(0xF100u + 'A', 0) && glyph(0xF200u + 'a', 
 static void sf_str(const char* s, int style, char* o, size_t cap)
 {
     size_t j = 0; const unsigned base = style == 2 ? 0xF200u : 0xF100u;
-    for (const unsigned char* p = (const unsigned char*)s; *p && j + 4 < cap; p++) {
-        if (*p >= 32 && *p < 127) { const unsigned cp = base + *p; o[j++] = (char)(0xE0 | (cp >> 12)); o[j++] = (char)(0x80 | ((cp >> 6) & 0x3F)); o[j++] = (char)(0x80 | (cp & 0x3F)); }
-        else o[j++] = (char)*p;
+    s = ui_tr(s);
+    for (const unsigned char* p = (const unsigned char*)s; *p && j + 4 < cap; ) {
+        const unsigned char* q = p; unsigned c = utf8_next(&p);
+        if ((c >= 32 && c < 127) || (c >= 0xA0 && c <= 0xFF && glyph(base + c, 0))) { const unsigned cp = base + c; o[j++] = (char)(0xE0 | (cp >> 12)); o[j++] = (char)(0x80 | ((cp >> 6) & 0x3F)); o[j++] = (char)(0x80 | (cp & 0x3F)); }
+        else while (q < p && j + 1 < cap) o[j++] = (char)*q++;
     }
     o[j] = 0;
 }
 static float sf_w(const char* s, int style, float size)
 {
-    if (!sf_ok()) return text_width(s, (int)strlen(s), size);
+    if (!sf_ok()) { s = ui_tr(s); return text_width(s, (int)strlen(s), size); }
     char b[720]; sf_str(s, style, b, sizeof b); return text_width(b, (int)strlen(b), size);
 }
 static void sf_draw(const char* s, int style, float x, float y, float size, const float c[4])
 {
-    if (!sf_ok()) { text_draw(s, (int)strlen(s), x, y, size, c); return; }
+    if (!sf_ok()) { s = ui_tr(s); text_draw(s, (int)strlen(s), x, y, size, c); return; }
     char b[720]; sf_str(s, style, b, sizeof b); text_draw(b, (int)strlen(b), x, y, size, c);
 }
 static void ss_outline(float x0, float y0, float x1, float y1, const float c[4])
@@ -2558,8 +2575,8 @@ static void skip_build(void)
     const float a = s_skip_a, k = vis == 2 ? 1.0f : g_skip_progress;
     const int kbm = g_input_kbm > 0;
     const float sz = 24.0f, isz = 30.0f, pad = 16.0f;
-    const char* t1 = vis == 2 ? "Skipping..." : "Hold";
-    const char* t2 = vis == 2 ? "" : "to skip";
+    const char* t1 = vis == 2 ? ui_tr("Skipping...") : ui_tr("Hold");
+    const char* t2 = vis == 2 ? "" : ui_tr("to skip");
     const unsigned ico = kbm ? 0xF100u : 0xF083u;
     const UGlyph* g = vis == 2 ? NULL : glyph(ico, 1);
     const float iw = g ? g->w * (isz / s_iline) : 0.0f;

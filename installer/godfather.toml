@@ -51,6 +51,7 @@ include = [
   "godfather-recomp/assets/gf_kbm_glyphs.bin",
   "godfather-recomp/assets/gf_gps.bin",
   "godfather-recomp/assets/ui_font.bin",
+  "godfather-recomp/assets/gf_shops.txt",
   "godfather-recomp/texreplace/",
 ]
 exclude = [
@@ -74,6 +75,7 @@ loose = [
   "godfather-recomp/assets/gf_kbm_glyphs.bin",
   "godfather-recomp/assets/gf_gps.bin",
   "godfather-recomp/assets/ui_font.bin",
+  "godfather-recomp/assets/gf_shops.txt",
   "godfather-recomp/texreplace/**",
 ]
 full_patch_ok = []
@@ -188,6 +190,21 @@ note = "Key caps are drawn with FreeSans Bold / DejaVu Sans Bold if installed, e
 run = ["{python}", "{port}/tools/gf_kbm_build.py", "{usrdir}", "{port}/assets/gf_kbm_glyphs.bin"]
 optional = true
 outputs = ["godfather-recomp/assets/gf_kbm_glyphs.bin"]
+
+[[step]]
+id = "uifont"
+title = "Overlay font (inventory, stores, PC settings and co-op menus, notices)"
+note = "The game's own fonts (Trade Gothic, Magnesium) from frontend.str; if they cannot be read, installed fonts (FreeSans / DejaVu / Arial Bold, P052 / Palatino / Georgia; UI_FONT_TTF=<file.ttf> forces this). Icons from the game's prompt atlas."
+run = ["{python}", "{port}/tools/gf_uifont_build.py", "{usrdir}", "{port}/assets/ui_font.bin"]
+optional = true
+outputs = ["godfather-recomp/assets/ui_font.bin"]
+
+[[step]]
+id = "shops"
+title = "Store locations (business interiors)"
+run = ["{python}", "{port}/tools/gf_shops_build.py", "{usrdir}/godfather_v4", "{port}/assets/gf_shops.txt"]
+optional = true
+outputs = ["godfather-recomp/assets/gf_shops.txt"]
 
 [[step]]
 id = "texreplace"
@@ -334,8 +351,8 @@ forbid = [
   "**/texpack*/**", "**/*_ls.bin", "**/EBOOT.*", "**/wheel_all/**", "**/texdump*/**",
   "godfather-recomp/texreplace/**", "godfather-recomp/texreplace_src/logo_reborn.png",
   "godfather-recomp/assets/gf_blood.bin", "godfather-recomp/assets/gf_sfx_bodyhit.bin",
-  "godfather-recomp/assets/gf_kbm_glyphs.bin", "godfather-recomp/assets/gf_collision.bin",
-  "godfather-recomp/assets/gf_dialogue.txt", "godfather-recomp/assets/gf_wheel.bin", "godfather-recomp/assets/gf_gps.bin", "godfather-recomp/assets/ui_font.bin",
+  "godfather-recomp/assets/gf_kbm_glyphs.bin", "godfather-recomp/assets/gf_collision.bin", "godfather-recomp/assets/gf_gps.bin", "godfather-recomp/assets/ui_font.bin", "godfather-recomp/assets/gf_shops.txt",
+  "godfather-recomp/assets/gf_dialogue.txt", "godfather-recomp/assets/gf_wheel.bin",
   "Godfather, The - The Don's Edition (Europe)/**",
   "_public/**",
 ]

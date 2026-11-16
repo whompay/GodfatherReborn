@@ -14,7 +14,12 @@ def h(t):
     return x
 def norm(t): return re.sub(r'[^a-z0-9]', '', t.lower())
 USR, OUT = sys.argv[1], sys.argv[2]
-lh2 = next(u for o, u in gf_str.chunks(os.path.join(USR, 'godfather_v4', 'text', '310D3A42.str')))
+# 310D3A42 = English table (BLES00043); BLES00047 ships F22B0CC2 (Spanish) instead. Category texts below are English,
+# so with a non-English table only the line list is built and the English-keyed categories stay empty.
+_T = os.path.join(USR, 'godfather_v4', 'text')
+_tp = next((os.path.join(_T, t) for t in ('310D3A42.str', 'F22B0CC2.str') if os.path.exists(os.path.join(_T, t))), None)
+if _tp is None: sys.exit('no subtitle table found in ' + _T)
+lh2 = next(u for o, u in gf_str.chunks(_tp))
 n = struct.unpack('>I', lh2[0xA0:0xA4])[0]
 keys = struct.unpack('>%dI' % n, lh2[0xB0:0xB0 + 4 * n]); offs = struct.unpack('>%dI' % n, lh2[0xB0 + 4 * n:0xB0 + 8 * n])
 idx = {k: i for i, k in enumerate(keys)}

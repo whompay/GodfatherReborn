@@ -1,14 +1,17 @@
 """gf_uifont.py -- build assets/ui_font.bin ("IFUIFNT1") for the runtime overlay (rsx_ui_overlay.c) in Godfather.
 Text glyphs from a bold sans TTF; icon glyphs: 0xF080 circle, 0xF081 square, 0xF082 triangle, 0xF083 cross (cut from
 the game's own prompt atlas), 0xF100 SPACE keycap, 0xF101 ENTER keycap, 0xF102 ESC keycap (gf_glyphs.py style)."""
-import struct, sys, numpy as np
+import struct, sys, os, numpy as np
 from PIL import Image, ImageDraw, ImageFont
-sys.path.insert(0, '.')
+sys.path.insert(0, '.'); sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gf_tex import decode
 import gf_glyphs as G
 
 AW = AH = 1024; TLINE = 64; ILINE = 64
-FONT = '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'
+FONT = next((f for f in [os.environ.get('UI_FONT_TTF', ''), '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+             '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts', 'arialbd.ttf')] if f and os.path.isfile(f)), None)
+if not FONT: sys.exit('no bold sans font found; set UI_FONT_TTF=<file.ttf>')
+G.FONT = FONT   # the key caps use the same font
 atlas = Image.new('RGBA', (AW, AH), (0, 0, 0, 0))
 recs = []
 x, y, rowh = 4, 4, 0

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+extern const char* ui_tr(const char* en);   /* ui_i18n.c: the port's text in the game language */
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
@@ -364,7 +365,7 @@ static void update_here(uint32_t pl)   /* main thread */
                     kp = near_keeper(bi, p);
                     const char* why = kp ? keeper_refuses(kp) : NULL;
                     if (why) { if (s_refused != kp) { s_refused = kp; char who[64] = ""; gf_npc_name(kp, who, sizeof who);
-                                   toast("%s won't serve you - %s", who[0] ? who : "The shopkeeper", why); SLOG("[shop] v1110U %08X refuses: %s\n", kp, why); }
+                                   toast("%s won't serve you - %s", who[0] ? who : ui_tr("The shopkeeper"), why); SLOG("[shop] v1110U %08X refuses: %s\n", kp, why); }
                                kp = 0; if (now_s() - s_page_t < 0.2) s_req_page = -1; }
                     else if (kp) s_refused = 0;
                 }
@@ -434,11 +435,12 @@ static void inv_save(void)
 static char s_toast[128]; static volatile LONG s_toast_seq, s_toast_read;
 static void toast(const char* fmt, ...)
 {
-    va_list a; va_start(a, fmt); vsnprintf(s_toast, sizeof s_toast, fmt, a); va_end(a);
+    extern const char* ui_tr(const char* en);   /* ui_i18n.c: game language */
+    va_list a; va_start(a, fmt); vsnprintf(s_toast, sizeof s_toast, ui_tr(fmt), a); va_end(a);
     InterlockedIncrement(&s_toast_seq);
     SLOG("[shop] %s\n", s_toast);
 }
-void gf_shop_toast(const char* msg) { toast("%s", msg); }
+void gf_shop_toast(const char* msg) { extern const char* ui_tr(const char* en); toast("%s", ui_tr(msg)); }
 static volatile LONG s_rq_head, s_rq_tail; static volatile int s_rq[16];   /* (page << 8) | item index */
 static void push_rq(int v) { const LONG h = s_rq_head; if (h - s_rq_tail >= 16) return; s_rq[h & 15] = v; InterlockedExchange(&s_rq_head, h + 1); }
 
@@ -472,10 +474,10 @@ static void use_item(uint32_t pl, int i)
         float nh = hp + it->heal * mx; if (nh > mx) nh = mx;
         wrf(pl + 0x14C8u, nh);
         s_cnt[i]--; s_dirty = 1;
-        toast("%s  +%d health", it->name, (int)(nh - hp + 0.5f));
+        toast("%s  +%d health", ui_tr(it->name), (int)(nh - hp + 0.5f));
         return;
     }
-    toast("%s - keep it for someone special", it->name);
+    toast("%s - keep it for someone special", ui_tr(it->name));
 }
 static void buy_item(int i)
 {
@@ -483,11 +485,11 @@ static void buy_item(int i)
     const item_t* it = &k_items[i];
     if (!s_here || !(it->stores & SB(s_here))) { toast("Not sold here"); return; }
     const int m = money_get(); if (m < 0) { toast("Not now"); return; }
-    if (m < it->price) { toast("Not enough cash - %s costs $%d", it->name, it->price); return; }
+    if (m < it->price) { toast("Not enough cash - %s costs $%d", ui_tr(it->name), it->price); return; }
     if (s_cnt[i] + it->per_buy > 9999) { toast("You can't carry any more"); return; }
     if (!money_set(m - it->price)) { toast("The till is stuck - try again"); return; }
     s_cnt[i] += it->per_buy; s_dirty = 1;
-    toast("Bought %s  -$%d", it->name, it->price);
+    toast("Bought %s  -$%d", ui_tr(it->name), it->price);
 }
 
 /* ------------------------------------------------------------------ main-thread tick (gf_trainer.c main_tick) */
@@ -1271,17 +1273,17 @@ static void tl_buy(int i)   /* main thread, Enter on an item */
 {
     if (i < 0 || i >= TL_N) return;
     const tl_item_t* it = &k_tl[i];
-    if (s_tl_owned[i]) { s_tl_equip[it->slot] = it->idx; toast("Wearing the %s", it->name); return; }
+    if (s_tl_owned[i]) { s_tl_equip[it->slot] = it->idx; toast("Wearing the %s", ui_tr(it->name)); return; }
     if (!s_tl_avail[i]) { toast("Gabriel doesn't have that in your size yet"); return; }
     const int m = money_get(); if (m < 0) { toast("Not now"); return; }
-    if (m < it->price) { toast("Not enough cash - the %s costs $%d", it->name, it->price); return; }
+    if (m < it->price) { toast("Not enough cash - the %s costs $%d", ui_tr(it->name), it->price); return; }
     const uint32_t mgr = tp_rd32(0x10181064u);
     if (!tp_ok(mgr, 0x40) || !tl_gstr(it->id)) { toast("The tailor can't sell that right now"); return; }
     if (it->price && !money_set(m - it->price)) { toast("The till is stuck - try again"); return; }
     if (!tv_g(0x0038B79Cu, mgr, s_tl_gbuf, 3, 0, NULL)) { if (it->price) money_set(m); toast("The tailor can't sell that right now"); return; }
     s_tl_owned[i] = 1; s_tl_equip[it->slot] = it->idx;
     SLOG("[tailor] v1112A bought %s (%s) for $%d -> clothing status 3\n", it->id, it->name, it->price);
-    toast("Bought the %s  -$%d", it->name, it->price);
+    toast("Bought the %s  -$%d", ui_tr(it->name), it->price);
 }
 static int tc_call(uint32_t fn, const char* set, uint64_t a2, int* out)   /* main thread: fn(E, set, a2) */
 {

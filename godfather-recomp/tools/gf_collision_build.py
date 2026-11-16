@@ -76,7 +76,7 @@ def scan_file(f):
     return col, hdr_name, neo, direct, blocks, roots
 def main(root, outp):
     files = []
-    for r in root.split(';'): files += sorted(glob.glob(os.path.join(r, '**', '*.str'), recursive=True)) if os.path.isdir(r) else [r]
+    for r in root.split(';'): files += sorted(glob.glob(os.path.join(glob.escape(r), '**', '*.str'), recursive=True)) if os.path.isdir(r) else [r]
     files = [f for f in files if 'world_terrain' in f.replace('\\', '/') or os.path.basename(f).endswith('_global.str') or os.path.basename(f) == 'godfather_global_global.str']
     print(len(files), 'files'); sys.stdout.flush()
     from multiprocessing import Pool

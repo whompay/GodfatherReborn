@@ -94,6 +94,11 @@ def add_key_icons(src, tex, dst):
         o.write(atlas.tobytes())
 
 def main(usr, out):
+    if os.environ.get('UI_FONT_GAME', '') not in ('', '0'):       # opt-in: the game's own fonts (gf_uifont_game.py)
+        try:
+            import gf_uifont_game; gf_uifont_game.main(usr, os.path.abspath(out)); return
+        except (Exception, SystemExit) as e:
+            print('game fonts not usable (%s) -- using installed fonts' % e)
     if not (BASE and TEXT and SERIF_B and SERIF_I):
         sys.exit("ui font: a needed font was not found (bold sans, condensed sans, serif bold and italic)")
     out = os.path.abspath(out)

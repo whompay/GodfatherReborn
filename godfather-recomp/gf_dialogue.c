@@ -141,9 +141,14 @@ typedef struct { int cat; char spk[8]; char path[96]; char text[200]; } Line;
 static Line* s_ln; static int s_nln;
 static const char* const k_pr_m[] = { "ma01","ma02","ma03","ma04","ma05","ma06","ma07","ma08","ma11","ma12","ma13","ma15","ma20" };
 static const char* const k_pr_f[] = { "fm04","fm06","fm08" };
+extern const char* ui_tr(const char* en);           /* ui_i18n.c */
+extern const char* ps3_fs_lang_pack_dir(void);   /* sys_fs.c: language pack (langpack/<code>), NULL = base language */
 static int load_lines(void)
 {
     char exe[MAX_PATH]; DWORD n = GetModuleFileNameA(NULL, exe, MAX_PATH); FILE* f = NULL; char path[MAX_PATH + 64];
+    { const char* lp = ps3_fs_lang_pack_dir();   /* a language pack carries its own lines (that language's voices + subtitles) */
+      if (lp) { snprintf(path, sizeof path, "%s\\gf_dialogue.txt", lp); f = fopen(path, "rb");
+                if (f) DLOG("[dialogue] lines from the language pack: %s\n", path); } }
     if (n && n < MAX_PATH) { char* s = strrchr(exe, '\\'); if (s) *s = 0;
         static const char* rel[] = { "\\assets\\gf_dialogue.txt", "\\..\\assets\\gf_dialogue.txt", "\\..\\..\\assets\\gf_dialogue.txt" };
         for (int i = 0; i < 3 && !f; i++) { snprintf(path, sizeof path, "%s%s", exe, rel[i]); f = fopen(path, "rb"); } }
@@ -266,8 +271,11 @@ void gf_sfx_body_hit(float dist)
 static int s16(int v) { v &= 0xFFFF; return v >= 32768 ? v - 65536 : v; }
 static Pcm* decode_snu(const char* rel)
 {
-    char path[MAX_PATH + 160]; snprintf(path, sizeof path, "%s/PS3_GAME/USRDIR/audiostreams/%s", ppu_vfs_root ? ppu_vfs_root : ".", rel);
-    FILE* f = fopen(path, "rb"); if (!f) { DLOG("[dialogue] cannot open %s\n", path); return NULL; }
+    char path[MAX_PATH + 160]; FILE* f = NULL;
+    { const char* lp = ps3_fs_lang_pack_dir();
+      if (lp) { snprintf(path, sizeof path, "%s/audiostreams/%s", lp, rel); f = fopen(path, "rb"); } }
+    if (!f) { snprintf(path, sizeof path, "%s/PS3_GAME/USRDIR/audiostreams/%s", ppu_vfs_root ? ppu_vfs_root : ".", rel); f = fopen(path, "rb"); }
+    if (!f) { DLOG("[dialogue] cannot open %s\n", path); return NULL; }
     fseek(f, 0, SEEK_END); const long L = ftell(f); fseek(f, 0, SEEK_SET);
     if (L < 0x30 || L > 8 * 1024 * 1024) { fclose(f); return NULL; }
     uint8_t* d = (uint8_t*)malloc((size_t)L); const size_t got = fread(d, 1, (size_t)L, f); fclose(f);
@@ -509,7 +517,7 @@ static void open_menu(void)
     prime_keys();
     /* v1107L: women get a Flirt option */
     D.nact = 0; D.acts[D.nact++] = A_HELLO; D.acts[D.nact++] = A_GOSSIP; if (D.female) D.acts[D.nact++] = A_FLIRT; D.acts[D.nact++] = A_THREAT; D.acts[D.nact++] = A_LEAVE;
-    for (int i = 0; i < D.nact; i++) snprintf(g_gfd_opt[i], 40, "%s", k_act_label[D.acts[i]]);
+    for (int i = 0; i < D.nact; i++) { extern const char* ui_tr(const char* en); snprintf(g_gfd_opt[i], 40, "%s", ui_tr(k_act_label[D.acts[i]])); }
     g_gfd_nopt = D.nact; if (g_gfd_sel < 0 || g_gfd_sel >= D.nact) g_gfd_sel = 0;
     snprintf(g_gfd_who, sizeof g_gfd_who, "%s", D.name);
     g_gfd_menu = 1; D.st = D_MENU; D.t_menu = now_s();
@@ -611,15 +619,15 @@ static void play_tick(uint32_t pl)
             const int cat = D.act == A_HELLO ? C_PL_HELLO : D.act == A_GOSSIP ? C_PL_GOSSIP : C_PL_FLIRT;
             const int speak = D.act == A_FLIRT || (rnd() % 100) < 75u;   /* hello / gossip have one line each: not every time */
             const Line* ln = speak ? pick(cat, "plyr") : NULL; const double l = ln ? play_line(ln, 1.0f) : 0.0;
-            if (ln && l > 0.0) { if (ln->text[0]) set_sub("You", ln->text, l); DLOG("[dialogue] player: \"%s\" (%s, %.1f s)\n", ln->text, ln->path, l); }
+            if (ln && l > 0.0) { if (ln->text[0]) set_sub(ui_tr("You"), ln->text, l); DLOG("[dialogue] player: \"%s\" (%s, %.1f s)\n", ln->text, ln->path, l); }
             len = l > 0.0 ? l + 0.25 : 0.55; }
         else if (D.act == A_THREAT) { const int gun = armed();
             if (!gun) play_gesture(pl, (rnd() & 1) ? "f2f_player_brandish_fist" : "f2f_player_thump_fist_chest"); s_pl_gest_end = now_s() + 1.6;
             const Line* ln = pick(gun ? C_PL_THREAT_GUN : C_PL_THREAT, "plyr"); const double l = play_line(ln, 1.0f);
-            if (ln && l > 0.0) { set_sub("You", ln->text, l); DLOG("[dialogue] player: \"%s\" (%s, %.1f s)\n", ln->text, ln->path, l); }
+            if (ln && l > 0.0) { set_sub(ui_tr("You"), ln->text, l); DLOG("[dialogue] player: \"%s\" (%s, %.1f s)\n", ln->text, ln->path, l); }
             len = l > 0.0 ? l + 0.25 : 0.6; }
         else { const Line* ln = pick(C_PL_BYE, "plyr");   /* v1107W: no hat tip (user: ugly + too long) */ const double l = play_line(ln, 1.0f);
-            if (ln && l > 0.0 && ln->text[0]) set_sub("You", ln->text, l); len = l > 0.0 ? l : 0.5; }
+            if (ln && l > 0.0 && ln->text[0]) set_sub(ui_tr("You"), ln->text, l); len = l > 0.0 ? l : 0.5; }
         D.step = 1; D.t_step = t + len; return;
     }
     if (D.step == 1) {
