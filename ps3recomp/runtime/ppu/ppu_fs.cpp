@@ -44,6 +44,60 @@ extern "C" void ydkj_host_bt(const char* tag);
 #define O_BINARY 0       /* POSIX has no text/binary distinction */
 #endif
 
+/* v1130P Windows long paths. open()/stat()/fopen() take an ANSI path, and the ANSI file APIs stop at MAX_PATH
+ * (260) unless the user flipped LongPathsEnabled in the registry AND the exe is longPathAware. A disc dumped
+ * into a deep folder (e.g. "...\Godfather, The - The Don's Edition (Europe)\Godfather, The - The Don's Edition
+ * (Europe)") pushes the deepest Godfather files past it: smbiz_014_bakery_267/layout_014_design_267/
+ * 267_venue_takeover_alt.str (Trapani's Bakery favour: the dealer in the alley is never spawned and the mission
+ * can't go on) and construction_zone_content.str both came back ENOENT while RPCS3 reads them fine. So when the
+ * plain call fails on a long path it is retried through the wide API with the "\\?\" prefix, which has no
+ * MAX_PATH limit. CP_ACP is the code page the ANSI call itself used, so the same bytes name the same file. */
+#ifdef _WIN32
+static int fs_wlong(const char* p, wchar_t* out, size_t n)
+{
+    if (strlen(p) < 240) return 0;                       /* short paths: the plain call already told the truth */
+    wchar_t w[2048], full[2048];
+    if (!MultiByteToWideChar(CP_ACP, 0, p, -1, w, 2048)) return 0;
+    DWORD fl = GetFullPathNameW(w, 2048, full, NULL);    /* absolute + '/' -> '\' (\\?\ disables both) */
+    if (fl == 0 || fl >= 2048) return 0;
+    if (full[0] == L'\\' && full[1] == L'\\')            /* \\server\share -> \\?\UNC\server\share */
+        return _snwprintf(out, n, L"\\\\?\\UNC\\%ls", full + 2) > 0;
+    return _snwprintf(out, n, L"\\\\?\\%ls", full) > 0;
+}
+static int fs_open(const char* p, int fl, int mode)
+{
+    int fd = open(p, fl, mode);
+    if (fd >= 0) return fd;
+    wchar_t w[2100];
+    return fs_wlong(p, w, 2100) ? _wopen(w, fl, mode) : fd;
+}
+static int fs_stat(const char* p, struct stat* st)
+{
+    int r = stat(p, st);
+    if (r == 0) return r;
+    wchar_t w[2100];
+    if (!fs_wlong(p, w, 2100)) return r;
+#if defined(_MSC_VER) || defined(_UCRT)
+    static_assert(sizeof(struct stat) == sizeof(struct _stat64i32), "stat layout");
+    return _wstat64i32(w, (struct _stat64i32*)st);       /* what the CRT's own stat() forwards to */
+#else
+    return r;
+#endif
+}
+static FILE* fs_fopen_rb(const char* p)
+{
+    int fd = fs_open(p, O_RDONLY | O_BINARY, 0666);
+    if (fd < 0) return NULL;
+    FILE* f = fdopen(fd, "rb");
+    if (!f) close(fd);
+    return f;
+}
+#else
+#define fs_open open
+#define fs_stat stat
+static FILE* fs_fopen_rb(const char* p) { return fopen(p, "rb"); }
+#endif
+
 extern "C" uint8_t* vm_base;
 extern "C" void ppu_guest_caller(char* out, size_t n);
 extern "C" uint32_t ppu_vm_size;
@@ -208,7 +262,7 @@ static FILE* snu_open(int fd)
     char hp[1100];
     if (!g_fd_path[fd][0]) return NULL;
     host_path(hp, sizeof hp, g_fd_path[fd]);
-    return fopen(hp, "rb");
+    return fs_fopen_rb(hp);
 }
 /* v1053N: how a skipped cutscene's track is ended. GF_SKIP_AUDIO_END=1 (default) SILENCES it: the payload of every
  * SNS block (after the 8-byte header: flags/size + sample count) in the chunk is zeroed in guest memory, which EA-XAS
@@ -410,12 +464,12 @@ static void cellFsOpen(ppu_context* ctx)
      * S_IFMT/S_IFDIR rather than S_ISDIR: MSVC's CRT does not define the macro. */
     {
         struct stat _dst;
-        if (stat(hpath, &_dst) == 0 && (_dst.st_mode & S_IFMT) == S_IFDIR) {
+        if (fs_stat(hpath, &_dst) == 0 && (_dst.st_mode & S_IFMT) == S_IFDIR) {
             ctx->gpr[3] = (uint64_t)(int64_t)CELL_FS_EISDIR;
             return;
         }
     }
-    int hfd = open(hpath, oflags | O_BINARY, 0666);
+    int hfd = fs_open(hpath, oflags | O_BINARY, 0666);
     if (hfd < 0) {
         fprintf(stderr, "[fs] open FAIL '%s' -> '%s'\n", gpath, hpath);
         ctx->gpr[3] = (uint64_t)(int64_t)CELL_FS_ENOENT; return;
@@ -493,7 +547,7 @@ static void cellFsSdataOpen(ppu_context* ctx)
       const char* use = edat_resolve(hpath, dec_path, sizeof dec_path);
       if (use != hpath) snprintf(hpath, sizeof hpath, "%s", use); }
 
-    int hfd = open(hpath, O_RDONLY | O_BINARY, 0666);
+    int hfd = fs_open(hpath, O_RDONLY | O_BINARY, 0666);
     if (hfd < 0) {
         fprintf(stderr, "[fs] SdataOpen FAIL '%s' -> '%s'\n", gpath, hpath);
         ctx->gpr[3] = (uint64_t)(int64_t)CELL_FS_ENOENT; return;
@@ -799,7 +853,7 @@ static void cellFsStat(ppu_context* ctx)
     uint32_t sb = (uint32_t)ctx->gpr[4];
     host_path(hpath, sizeof hpath, gpath);
     struct stat st;
-    if (stat(hpath, &st) != 0) {
+    if (fs_stat(hpath, &st) != 0) {
         if (getenv("PS3_FSLOG")) fprintf(stderr, "[fs] stat '%s' -> ENOENT\n", gpath);
         ctx->gpr[3] = (uint64_t)(int64_t)CELL_FS_ENOENT; return;
     }
@@ -866,7 +920,7 @@ static void cellFsReaddir(ppu_context* ctx)
     if (!e) { if (nread_ptr) vm_write64(nread_ptr, 0); ctx->gpr[3] = CELL_OK; return; }
     char full[1300]; struct stat st;
     snprintf(full, sizeof full, "%s/%s", g_dir_path[fd], e->d_name);
-    uint8_t type = (stat(full, &st) == 0 && (st.st_mode & S_IFDIR))
+    uint8_t type = (fs_stat(full, &st) == 0 && (st.st_mode & S_IFDIR))
                    ? CELL_FS_TYPE_DIR : CELL_FS_TYPE_REG;
     size_t nl = strlen(e->d_name); if (nl > 255) nl = 255;
     vm_base[dirent + 0] = type;
