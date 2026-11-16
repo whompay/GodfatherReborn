@@ -6890,9 +6890,16 @@ static int kg_ready(void)
         char* sl = strrchr(exe, '\\'); if (sl) *sl = 0;
         static const char* rel[] = { "\\assets\\", "\\..\\assets\\", "\\..\\..\\assets\\" };
         static const char* fn[] = { "kbm_icons.bin", "kbm_prompts.bin", "gf_kbm_glyphs.bin" };   /* v1042K: + Godfather */
+        /* v1130P: the "PC Classic" keyboard scheme (KBM_SCHEME=classic, settings menu) has its own Godfather atlas */
+        const char* ks = getenv("KBM_SCHEME"); const int classic = ks && !_stricmp(ks, "classic");
         for (int k = 0; k < 3; k++)
             for (int i = 0; i < 3; i++) {
-                char p2[MAX_PATH + 64]; snprintf(p2, sizeof p2, "%s%s%s", exe, rel[i], fn[k]);
+                char p2[MAX_PATH + 64];
+                if (k == 2 && classic) {   /* v1130P: the PC Classic atlas, else the Reborn one */
+                    snprintf(p2, sizeof p2, "%s%sgf_kbm_glyphs_classic.bin", exe, rel[i]);
+                    if (kg_try(p2)) break;
+                }
+                snprintf(p2, sizeof p2, "%s%s%s", exe, rel[i], fn[k]);
                 if (kg_try(p2)) break;
             }
     }

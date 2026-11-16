@@ -22,9 +22,11 @@ def main(src, dst, font=None):
         open(tmp, 'wb').write(b'GFTEX1\0\0' + struct.pack('<5I', w, h, fmt, nb, cs) + kbm)
         _, _, _, _, img = decode(tmp)
         img = np.clip(img, 0, 255).astype(np.uint8); menu = img.copy()
-        for name, label in (('L1', 'Q'), ('R1', 'E')):
+        for name, label in (('L1', 'Q'), ('R1', 'E')) + ((('CROSS', 'ENTER'),) if G.SCHEME == 'classic' else ()):   # v1130E: PC Classic menus confirm with Enter
             x0, y0, x1, y1 = G.CELLS[name]
             G.paste_cell(menu, G.CELLS[name], G.g_key(x1 - x0, y1 - y0, label))
+        if G.SCHEME == 'classic':   # v1130Q: no d-pad buttons in PC Classic menus / the weapon dealer's buy screen (mouse)
+            x0, y0, x1, y1 = G.CELLS['DPAD']; menu[y0:y1, x0:x1] = 0
         mb = G.enc_dxt3(menu, img, kbm)
         assert len(mb) == nb
         ents.append((w, h, fmt, nb, cs, orig, kbm, pad, mb))

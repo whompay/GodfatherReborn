@@ -342,9 +342,61 @@ static void f2f_dump(const char* tag, uint32_t obj, int words)
     for (int i = 0; i < words && o < 2300; i++) { const uint32_t v = rd32(obj + 4u * (uint32_t)i); if (v) o += snprintf(b + o, sizeof b - (size_t)o, " +%X=%08X", 4 * i, v); }
     FLOG("[f2f] %s dump %08X:%s\n", tag, obj, b);
 }
+/* v1130Q the weapon dealer's buy screen (PC Classic keyboard scheme: clicked with the mouse, cellPad.c g_pad_shop_fn).
+ * The player F2F state machine (this file's hk_pf_act 'this') keeps its current state object in one of its words; every state
+ * object points at its name string (playerF2FStateTable: "F2FActivate" 0x1000A6C0, "F2FShopping" 0x1000A6D0, ...). The
+ * main-thread tick finds the words of the SM that point at a state (a name in 0x1000A600..0x1000A800 starting "F2F") and
+ * whose value changes -- that word is the current state; shopping = it names F2FShopping. Log [f2f] v1130Q. */
+static volatile uint32_t s_pf_sm = 0;
+static volatile int s_pf_latch = 0;   /* v1130R */
+static volatile unsigned long long s_pf_loop_t = 0;   /* v1130Q-2: last run of the buy-screen frame action 0x3E */
+static volatile int s_f2f_shop = 0;
+int gf_f2f_shopping(void) { return s_f2f_shop; }
+static int f2f_state_name(uint32_t p, uint32_t* name)
+{
+    if (!ok(p)) return 0;
+    for (int k = 0; k < 16; k++) {
+        const uint32_t n = rd32(p + 4u * (uint32_t)k);
+        if (n >= 0x1000A600u && n < 0x1000A800u && !memcmp(vm_base + n, "F2F", 3)) { *name = n; return 1; }
+    }
+    return 0;
+}
+static void f2f_shop_tick(void)
+{
+    static uint32_t sm0 = 0, last[128]; static uint8_t dyn[128]; static int nlog = 0;
+    const uint32_t sm = s_pf_sm; int shop = 0;
+    if (!ok(sm)) { s_f2f_shop = 0; return; }
+    if (sm != sm0) { sm0 = sm; memset(last, 0, sizeof last); memset(dyn, 0, sizeof dyn); }
+    __try {
+        for (int i = 0; i < 128; i++) {
+            uint32_t name = 0; const uint32_t p = rd32(sm + 4u * (uint32_t)i);
+            if (!f2f_state_name(p, &name)) { last[i] = 0; continue; }
+            if (last[i] && last[i] != name) {
+                dyn[i] = 1;
+                if (nlog < 200) { nlog++; printf("[f2f] v1130Q state +%X: %s -> %s\n", 4 * i, (const char*)(vm_base + last[i]), (const char*)(vm_base + name)); fflush(stdout); }
+            }
+            last[i] = name;
+            if (dyn[i] && name == 0x1000A6D0u) shop = 1;   /* "F2FShopping" */
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { shop = 0; }
+    /* v1130Q-2: the state words did not change in the first test (no [f2f] v1130Q state lines) -- the buy screen's own
+     * per-frame action (0x3E, between 0x3B and 0x3A) is the signal. GF_SHOP_ACT_MS (300) = how long it counts. */
+    { static int ms = -1; if (ms < 0) { const char* e = getenv("GF_SHOP_ACT_MS"); ms = (e && *e) ? atoi(e) : 300; }
+      if (s_pf_loop_t && GetTickCount64() - s_pf_loop_t < (unsigned long long)ms) shop = 1;
+      else if (s_pf_latch && s_pf_valid) shop = 2; }   /* v1130R: 2 = a pop-up over it (Yes / No); cond 33 = the F2F still has its target */
+    if (shop != s_f2f_shop) { printf("[f2f] v1130Q buy screen %s (SM +28=%u)\n", shop == 2 ? "POP-UP" : shop ? "OPEN" : "closed", ok(sm) ? rd32(sm + 0x28u) : 0u); fflush(stdout); }
+    s_f2f_shop = shop;
+}
 static void hk_pf_act(ppu_context* c)
 {
-    const uint32_t th = (uint32_t)c->gpr[3]; const uint32_t r4 = (uint32_t)c->gpr[4], r5 = (uint32_t)c->gpr[5], r6 = (uint32_t)c->gpr[6], r7 = (uint32_t)c->gpr[7];
+    const uint32_t th = (uint32_t)c->gpr[3]; s_pf_sm = th;
+    { const uint32_t act = (uint32_t)c->gpr[7];
+      if (act == 0x3Eu) { s_pf_loop_t = GetTickCount64(); s_pf_latch = 1; }
+      else if (act == 0x2Du || act == 0x2Eu || act == 0x3Du) s_pf_latch = 1;   /* v1130T F2FActivate: every face-to-face menu (bribe, ...) */
+      /* v1130R: the buy screen's own pop-ups ("Do you want to buy it? Yes / No") stop 0x3E -- stay latched until the F2F
+       * goes back to Inactive / Valid (0x27 / 0x28 / 0x29) */
+      else if (act == 0x27u || act == 0x28u || act == 0x29u) s_pf_latch = 0;
+      if (s_pf_latch && act != 0x3Au && act != 0x3Bu && act != 0x3Eu) { static int n = 0; if (n < 60) { n++; printf("[f2f] v1130R act %X while buying\n", act); fflush(stdout); } } } const uint32_t r4 = (uint32_t)c->gpr[4], r5 = (uint32_t)c->gpr[5], r6 = (uint32_t)c->gpr[6], r7 = (uint32_t)c->gpr[7];
     static uint8_t seen[256];
     o_pf_act(c);
     __try { FLOG("[f2f] player act this=%08X r4=%X r5=%X r6=%X r7=%X -> %X\n", th, r4, r5, r6, r7, (uint32_t)c->gpr[3]);
@@ -389,6 +441,7 @@ static void f2f_probe_init(void)
     if (!o_pf_act || !o_pf_cond || !o_nf_act || !o_nf_cond) { FLOG("[f2f] v1107P probe: a function is missing -- off\n"); return; }
     ppu_register_function(0x001FD7B8u, hk_pf_act); ppu_register_function(0x001F765Cu, hk_pf_cond);
     ppu_register_function(0x001A851Cu, hk_nf_act); ppu_register_function(0x001A7178u, hk_nf_cond);
+    { extern int (*volatile g_pad_shop_fn)(void); g_pad_shop_fn = gf_f2f_shopping; }   /* v1130Q */
     FLOG("[f2f] v1107P probe ON (player F2F act/cond, NPC F2F act/cond hooked)\n");
 }
 
@@ -672,6 +725,7 @@ void gf_dialogue_tick(void)
         f2f_probe_init();   /* v1107P */
         DLOG("[dialogue] v1106D street dialogue %s (key %c, vol %.2f, duck %.2f)\n", s_on ? "ON" : "off", s_key, s_vol, s_duck);
     }
+    f2f_shop_tick();   /* v1130Q */
     if (!s_on) return;
     for (int i = 0; i < s_ndead; i++) if (GetTickCount64() - s_dead[i].t > 200 && s_dead[i].p != s_cur) {
         free(s_dead[i].p->s); free(s_dead[i].p); s_dead[i] = s_dead[--s_ndead]; i--; }

@@ -1207,21 +1207,57 @@ static void kbm_bind(int vk, u16 btn)
     for (int i = 0; i < s_kbm_nbinds; i++) if (s_kbm_binds[i].vk == vk) { s_kbm_binds[i].btn = btn; return; }
     if (s_kbm_nbinds < (int)(sizeof s_kbm_binds / sizeof s_kbm_binds[0])) { s_kbm_binds[s_kbm_nbinds].vk = vk; s_kbm_binds[s_kbm_nbinds].btn = btn; s_kbm_nbinds++; }
 }
+/* v1130P keyboard / mouse scheme (settings menu "Keyboard Controls", settings.ini KBM_SCHEME, restart):
+ *   reborn  (default) = the port's own layout (pad_poll_kbm_generic_reborn),
+ *   classic = "PC Classic": the original EA PC port's controls (pad_poll_kbm_generic). Read once. */
+volatile int g_kbm_classic = -1;
+static int kbm_classic(void)
+{
+    if (g_kbm_classic < 0) { const char* e = getenv("KBM_SCHEME"); g_kbm_classic = (e && !_stricmp(e, "classic")) ? 1 : 0;
+                             printf("[cellPad] v1130P keyboard/mouse scheme: %s\n", g_kbm_classic ? "PC Classic" : "Reborn"); fflush(stdout); }
+    return g_kbm_classic;
+}
 static void kbm_generic_init(void)
 {
-    kbm_bind(VK_SPACE, CELL_PAD_CTRL_CROSS);    kbm_bind(VK_RETURN, CELL_PAD_CTRL_CROSS);
-    kbm_bind('C', CELL_PAD_CTRL_CIRCLE);        kbm_bind(VK_BACK, CELL_PAD_CTRL_CIRCLE);
-    kbm_bind('F', CELL_PAD_CTRL_SQUARE);        kbm_bind('E', CELL_PAD_CTRL_TRIANGLE);
-    kbm_bind(VK_LBUTTON, CELL_PAD_CTRL_R1);     kbm_bind(VK_RBUTTON, CELL_PAD_CTRL_L1);
-    kbm_bind('Q', CELL_PAD_CTRL_L2);            kbm_bind('R', CELL_PAD_CTRL_R2);
-    kbm_bind('V', CELL_PAD_CTRL_L3);            /* v1043Y (user): Shift = hold to run (Cross), was L3 (still V) */
-    kbm_bind(VK_LSHIFT, CELL_PAD_CTRL_CROSS);   kbm_bind(VK_RSHIFT, CELL_PAD_CTRL_CROSS);
-    kbm_bind(VK_MBUTTON, CELL_PAD_CTRL_R3);     kbm_bind('Z', CELL_PAD_CTRL_R3);
-    kbm_bind(VK_UP, CELL_PAD_CTRL_UP);          kbm_bind(VK_DOWN, CELL_PAD_CTRL_DOWN);
-    kbm_bind(VK_LEFT, CELL_PAD_CTRL_LEFT);      kbm_bind(VK_RIGHT, CELL_PAD_CTRL_RIGHT);
-    kbm_bind('1', CELL_PAD_CTRL_UP);            kbm_bind('2', CELL_PAD_CTRL_RIGHT);
-    kbm_bind('3', CELL_PAD_CTRL_DOWN);          kbm_bind('4', CELL_PAD_CTRL_LEFT);
-    kbm_bind(VK_ESCAPE, CELL_PAD_CTRL_START);   kbm_bind(VK_TAB, CELL_PAD_CTRL_SELECT);
+    if (kbm_classic()) {   /* v1130P "PC Classic": the original EA PC port scheme */
+        /* v1130E EA PC scheme (default.ini of the original PC port + its in-game prompts): Enter = Cross, Space = Triangle (talk),
+         * C = Circle (crouch), Caps Lock / Num+ = Square (block / cover), J = L3, X = L3 (strangle), F = R3, LAlt = L2, RAlt / V = R2,
+         * P = R1, Ctrl = L1, R / H / Z / [ ] = d-pad. Shift = sprint (Cross) except in combat, where it is the strong-attack modifier. */
+        kbm_bind(VK_RETURN, CELL_PAD_CTRL_CROSS);   kbm_bind(VK_SPACE, CELL_PAD_CTRL_TRIANGLE);
+        kbm_bind('C', CELL_PAD_CTRL_CIRCLE);        kbm_bind(VK_BACK, CELL_PAD_CTRL_CIRCLE);
+        kbm_bind('T', CELL_PAD_CTRL_TRIANGLE);
+        kbm_bind(VK_CAPITAL, CELL_PAD_CTRL_SQUARE); kbm_bind(VK_ADD, CELL_PAD_CTRL_SQUARE);
+        kbm_bind(VK_LBUTTON, CELL_PAD_CTRL_R1);     kbm_bind(VK_RBUTTON, CELL_PAD_CTRL_L1);
+        kbm_bind(VK_LCONTROL, CELL_PAD_CTRL_L1);    kbm_bind('P', CELL_PAD_CTRL_R1);
+        kbm_bind(VK_LMENU, CELL_PAD_CTRL_L2);       kbm_bind(VK_RMENU, CELL_PAD_CTRL_R2);   kbm_bind('V', CELL_PAD_CTRL_R2);
+        kbm_bind('J', CELL_PAD_CTRL_L3);            kbm_bind('X', CELL_PAD_CTRL_L3);   /* + R3 while grabbing (strangle = L3 + R3, v1130J below) */
+        kbm_bind('F', CELL_PAD_CTRL_R3);            kbm_bind('Z', CELL_PAD_CTRL_RIGHT);
+        kbm_bind(VK_LSHIFT, CELL_PAD_CTRL_CROSS);   kbm_bind(VK_RSHIFT, CELL_PAD_CTRL_CROSS);
+        kbm_bind(VK_MBUTTON, CELL_PAD_CTRL_DOWN);
+        kbm_bind('R', CELL_PAD_CTRL_UP);            kbm_bind('H', CELL_PAD_CTRL_DOWN);
+        kbm_bind(VK_DECIMAL, CELL_PAD_CTRL_DOWN);
+        kbm_bind(VK_NUMPAD0, CELL_PAD_CTRL_R1);     kbm_bind(VK_MULTIPLY, CELL_PAD_CTRL_L3);   /* v1130K EA PC */
+        kbm_bind(VK_OEM_4, CELL_PAD_CTRL_LEFT);     kbm_bind(VK_OEM_6, CELL_PAD_CTRL_RIGHT);
+        kbm_bind(VK_UP, CELL_PAD_CTRL_UP);          kbm_bind(VK_DOWN, CELL_PAD_CTRL_DOWN);
+        kbm_bind(VK_LEFT, CELL_PAD_CTRL_LEFT);      kbm_bind(VK_RIGHT, CELL_PAD_CTRL_RIGHT);
+        kbm_bind('1', CELL_PAD_CTRL_UP);            kbm_bind('2', CELL_PAD_CTRL_RIGHT);
+        kbm_bind('3', CELL_PAD_CTRL_DOWN);          kbm_bind('4', CELL_PAD_CTRL_LEFT);
+        kbm_bind(VK_ESCAPE, CELL_PAD_CTRL_START);   kbm_bind(VK_PAUSE, CELL_PAD_CTRL_SELECT);   kbm_bind('N', CELL_PAD_CTRL_SELECT);
+    } else {               /* "Reborn": the port's own scheme */
+        kbm_bind(VK_SPACE, CELL_PAD_CTRL_CROSS);    kbm_bind(VK_RETURN, CELL_PAD_CTRL_CROSS);
+        kbm_bind('C', CELL_PAD_CTRL_CIRCLE);        kbm_bind(VK_BACK, CELL_PAD_CTRL_CIRCLE);
+        kbm_bind('F', CELL_PAD_CTRL_SQUARE);        kbm_bind('E', CELL_PAD_CTRL_TRIANGLE);
+        kbm_bind(VK_LBUTTON, CELL_PAD_CTRL_R1);     kbm_bind(VK_RBUTTON, CELL_PAD_CTRL_L1);
+        kbm_bind('Q', CELL_PAD_CTRL_L2);            kbm_bind('R', CELL_PAD_CTRL_R2);
+        kbm_bind('V', CELL_PAD_CTRL_L3);            /* v1043Y (user): Shift = hold to run (Cross), was L3 (still V) */
+        kbm_bind(VK_LSHIFT, CELL_PAD_CTRL_CROSS);   kbm_bind(VK_RSHIFT, CELL_PAD_CTRL_CROSS);
+        kbm_bind(VK_MBUTTON, CELL_PAD_CTRL_R3);     kbm_bind('Z', CELL_PAD_CTRL_R3);
+        kbm_bind(VK_UP, CELL_PAD_CTRL_UP);          kbm_bind(VK_DOWN, CELL_PAD_CTRL_DOWN);
+        kbm_bind(VK_LEFT, CELL_PAD_CTRL_LEFT);      kbm_bind(VK_RIGHT, CELL_PAD_CTRL_RIGHT);
+        kbm_bind('1', CELL_PAD_CTRL_UP);            kbm_bind('2', CELL_PAD_CTRL_RIGHT);
+        kbm_bind('3', CELL_PAD_CTRL_DOWN);          kbm_bind('4', CELL_PAD_CTRL_LEFT);
+        kbm_bind(VK_ESCAPE, CELL_PAD_CTRL_START);   kbm_bind(VK_TAB, CELL_PAD_CTRL_SELECT);
+    }
     const char* e = getenv("PAD_KBM_MAP");
     if (e && *e) {
         char buf[1024]; strncpy(buf, e, sizeof buf - 1); buf[sizeof buf - 1] = 0;
@@ -1260,6 +1296,10 @@ int (*volatile g_pad_namekb_seq_fn)(void) = 0;
 /* v1043Y: title hook, nonzero = a menu is up over the game (Godfather: pause menu, gf_prompts.c) -> WASD = d-pad */
 int (*volatile g_pad_menu_fn)(void) = 0;
 int (*volatile g_pad_incar_fn)(void) = 0;
+float (*volatile g_pad_car_speed_fn)(void) = 0;   /* v1130T gf_combat.c: player's car speed m/s, < 0 unknown */
+int (*volatile g_pad_shop_fn)(void) = 0;   /* v1130Q gf_dialogue.c: 1 = the weapon dealer's buy screen is up, 2 = its Yes / No pop-up (v1130R) */
+static int s_shop_popup = 0;
+static int s_shop_ptr = 0;                  /* v1130Q: PC Classic buy screen with the mouse (free pointer) */
 int (*volatile g_pad_gun_holstered_fn)(void) = 0;   /* v1053M: 1 = a gun is selected but holstered (gf_combat.c) */
 static unsigned long long s_draw_req_ms = 0;   /* v1053N2: last draw request (H / d-pad UP keys) */   /* v1053V: 1 = player is in a vehicle (Godfather: gf_combat.c) */
 /* v1044C: title hook for direct free-aim yaw (Godfather: gf_combat.c). Called while free aim is on with the mouse yaw of
@@ -1985,7 +2025,7 @@ static void pad_menu_mouse(int lmb)
  * AUDIO / CONTROLS ...); rsx_d3d12_backend.c shows the menu glyph variant (L1 / R1 drawn as Q / E keys) while
  * g_gf_menu_glyphs is set. PAD_MENU_QE=0 = old binds. */
 volatile int g_gf_menu_glyphs = 0;
-static void pad_poll_kbm_generic(int merge)
+static void pad_poll_kbm_generic_reborn(int merge)   /* v1130P "Reborn" scheme (unchanged) */
 {
     PadHostState* hs = &s_host_state[0];
     static int s_walk = -1, s_dz = 30, s_inv = 0; static float s_speed = 1200.0f, s_tau = 0.060f;
@@ -2581,6 +2621,740 @@ static void pad_poll_kbm_generic(int merge)
     { static int said = 0; if (!said && (btns || moving || looking)) { said = 1;
         printf("[cellPad] generic keyboard/mouse input active on port 0%s\n", merge ? " (merged with controller)" : ""); fflush(stdout); } }
 }
+static void pad_poll_kbm_generic(int merge)
+{
+    if (!kbm_classic()) { pad_poll_kbm_generic_reborn(merge); return; }   /* v1130P */
+    PadHostState* hs = &s_host_state[0];
+    static int s_walk = -1, s_dz = 30, s_inv = 0; static float s_speed = 1200.0f, s_tau = 0.060f;
+    if (s_walk < 0) {
+        /* v1115W2 (user: "can't walk with it toggled"): 64 is in Godfather's turn-on-the-spot band (0 m/s, gf_smoke.c
+         * 86_t6_sweep); 90 = the ~1.6 m/s walk the smoking cap uses. */
+        s_walk = pad_envi("PAD_KBM_WALK", 90); s_dz = pad_envi("PAD_MOUSE_DZ", 30); s_inv = pad_envi("PAD_MOUSE_INVERT_Y", 0);
+        const char* e = getenv("PAD_MOUSE_SPEED"); if (e && *e) s_speed = (float)atof(e); if (s_speed < 50.0f) s_speed = 50.0f;
+        s_tau = (float)pad_envi("PAD_MOUSE_SMOOTH_MS", 60) / 1000.0f; if (s_tau < 0.005f) s_tau = 0.005f;
+    }
+    static float s_vx = 0.0f, s_vy = 0.0f;        /* smoothed mouse velocity, px/s */
+    static LARGE_INTEGER s_f, s_t; LARGE_INTEGER now; QueryPerformanceCounter(&now);
+    if (!s_f.QuadPart) { QueryPerformanceFrequency(&s_f); s_t = now; }
+    double dt = (double)(now.QuadPart - s_t.QuadPart) / (double)s_f.QuadPart; s_t = now;
+    if (dt <= 0.0) dt = 0.001; if (dt > 0.1) dt = 0.1;
+    const long raw_dx = InterlockedExchange(&g_pad_raw_mdx, 0), raw_dy = InterlockedExchange(&g_pad_raw_mdy, 0);
+    const long raw_wheel = InterlockedExchange(&g_pad_raw_wheel, 0);   /* v1107U: menu scroll */
+    { const int foc = pad_host_window_focused();   /* v1043T-2: the typing queue also runs unfocused (soaks) */
+      if (pad_namekb_poll(hs, merge, foc)) { g_pad_mouse_captured = 0; return; } }
+    if (!pad_host_window_focused()) {
+        g_pad_mouse_captured = 0; s_vx = s_vy = 0.0f;
+        if (!merge) {
+            hs->buttons = 0; hs->analog_lx = hs->analog_ly = hs->analog_rx = hs->analog_ry = 128;
+            hs->trigger_l2 = hs->trigger_r2 = 0; hs->connected = 1;
+        }
+        return;
+    }
+#define KD(vk) ((GetAsyncKeyState(vk) & 0x8000) != 0)
+    /* Esc toggles a free pointer (and is START); a click inside the window grabs the mouse again. */
+    static int s_free = 0, s_esc_prev = 0, s_lmb_block = 0;
+    { const int esc = KD(VK_ESCAPE);
+      extern volatile int g_uiov_menu_open;
+      if (esc && !s_esc_prev && !g_uiov_menu_open) s_free = !s_free;
+      s_esc_prev = esc;
+      if (s_free && KD(VK_LBUTTON)) {
+          HWND fw = GetForegroundWindow(); POINT cp; RECT cr;
+          if (fw && GetCursorPos(&cp) && ScreenToClient(fw, &cp) && GetClientRect(fw, &cr) &&
+              cp.x >= 0 && cp.y >= 0 && cp.x < cr.right && cp.y < cr.bottom) { s_free = 0; s_lmb_block = 1; }
+      }
+      if (s_lmb_block && !KD(VK_LBUTTON)) s_lmb_block = 0; }
+    /* v1110V (user: "I clicked on a cigar in my inventory and instead of smoking the shopkeeper thought I intimidated him" -- the log:
+     * every click in the port's own pages (inventory / store / settings / trainer: g_uiov_menu_open) ALSO went to the game as R1 =
+     * punches, the smoke stopped on the held button, and the shopkeeper next to him got beaten). While such a page is open the mouse
+     * buttons do not reach the game, and a button held when it closes stays blocked until it is released. PAD_OV_MOUSE_BLOCK=0 = old. */
+    static int s_ovb = 0; int ov_mouse = 0;
+    { extern volatile int g_uiov_menu_open; static int on = -1; if (on < 0) on = pad_envi("PAD_OV_MOUSE_BLOCK", 1);
+      const int anyb = KD(VK_LBUTTON) || KD(VK_RBUTTON) || KD(VK_MBUTTON);
+      if (on) { if (g_uiov_menu_open && anyb) s_ovb = 1; if (!anyb) s_ovb = 0; ov_mouse = g_uiov_menu_open || s_ovb; } }
+    /* v1042M motion key (PAD_MOTION_KEY, default X): hold it and tap W forward / S lift / A,D swing left,right /
+     * Space slam down / E twist, or flick the mouse (forward = up, lift = down, left / right). While it is held
+     * those keys and the mouse stop driving movement, the camera, Cross and Triangle. */
+    static int s_mot_vk = -1; static int s_mprev[7];
+    if (s_mot_vk < 0) { const char* e = getenv("PAD_MOTION_KEY"); s_mot_vk = (e && *e) ? kbm_key_vk(e) : 0xFF;   /* v1130F: no gesture key by default (EA-style gestures below) */ if (!s_mot_vk) s_mot_vk = 'G';   /* v1130E: gesture key G (X = strangle / L3, EA PC scheme) */ }
+    const int mot = KD(s_mot_vk);
+    u16 btns = 0;
+    /* v1042X PC melee layout -- only with fists / a melee weapon in hand AND lock-on (RMB = L1) held:
+     *   F      tap = punch (right stick up; with A / D held: up-left / up-right = hooks), hold (PAD_KBM_BLOCK_MS,
+     *          180) = block (Square, F's normal button)
+     *   R      hold = charge (right stick down), release = power attack / throw an explosive (right stick up)
+     *   LMB    = R1 as always, so RMB+LMB = grab; while grabbing F = grab attacks,
+     *   Q / E  (while grabbing) = swing left / right: the right stick held left / right plus the SIXAXIS swing
+     *          gesture on the press (PAD_KBM_QE_MOTION=0: stick only)
+     * While locked on the mouse does not drive the right stick (no accidental flicks). Gun in hand, no lock-on, or no
+     * player (menus) = the normal mapping. PAD_KBM_COMBAT=0 (gf_combat.c) = off. The prompts say the same with the
+     * KBM glyphs ([RDLeft]=F, [RSBottom]=R, [LSBottom]=Q, [RDUp]=E; gf_prompts_table.h). */
+    const int cmb_gun = g_pad_weapon_fn ? g_pad_weapon_fn() : -1;
+    /* v1107U menu pointer: in the game's menus (no player: frontend, creator, loading; or the pause menu) with the keyboard /
+     * mouse in use, the mouse is not captured, so the pointer shows. LMB = Cross, RMB = Circle, wheel = d-pad up / down. */
+    static int s_mcur_on = -1; if (s_mcur_on < 0) s_mcur_on = pad_envi("PAD_MENU_CURSOR", 1);
+    static int s_menu_qe = -1; if (s_menu_qe < 0) s_menu_qe = pad_envi("PAD_MENU_QE", 1);
+    const int mcur = s_mcur_on && g_pad_kbm_last && !s_free &&
+                     ((g_pad_weapon_fn && cmb_gun < 0) || (g_pad_menu_fn && g_pad_menu_fn())) &&
+                     !(g_pad_cutscene_fn && g_pad_cutscene_fn());
+    { static int was = -1; if (mcur != was) { was = mcur; printf("[cellPad] v1107U menu pointer %s\n", mcur ? "ON" : "off"); fflush(stdout); } }
+    /* v1130Q PC Classic: the weapon dealer's buy screen (gf_dialogue.c F2FShopping) works with the mouse like the EA PC port:
+     * the pointer is free, a click on SALIR / EXIT (left bar) = d-pad left, on COMPRAR / BUY (right bar) = d-pad right, on the
+     * quantity arrows or the wheel = up / down; Enter = buy, Backspace = exit. The mouse buttons do not reach the game there.
+     * Bars at 1280x720: y 549..573, x 291..601 / 679..989; quantity arrows x ~818..836, y ~376..396. PAD_KBM_SHOP_MOUSE=0 = off. */
+    { static int on = -1; if (on < 0) on = pad_envi("PAD_KBM_SHOP_MOUSE", 1);
+      const int shp = g_pad_shop_fn ? g_pad_shop_fn() : 0;
+      const int sh = on && shp && g_pad_kbm_last && !s_free && !mcur && !ov_mouse;
+      s_shop_popup = sh && shp == 2;
+      if (sh != s_shop_ptr) { printf("[cellPad] v1130Q buy screen pointer %s\n", sh ? "ON" : "off"); fflush(stdout); }
+      s_shop_ptr = sh; }
+    /* v1044A (user: "free aim and aim assist like a Rockstar game", step 1): gun in hand -> hold RMB = the game's free-aim
+     * crosshair (R3 toggles it; one R3 pulse on RMB press, one on release), mouse = crosshair, LMB = fire. The old lock-on
+     * (L1) moves to T. Fists / melee keep RMB = lock-on (combat layout). PAD_KBM_FREEAIM=0 = old RMB = L1. */
+    static int fa_on = -1; if (fa_on < 0) fa_on = pad_envi("PAD_KBM_FREEAIM", 1);
+    /* v1119L (user: Monk's lesson in "Sleeping with the Fishes" can't be beaten -- "LOCK-ON: Hold L1" waits for the game's own
+     * lock-on, s1_TLN_lock_shoot2, and RMB = free aim never gives it): while the lesson runs (g_gf_classic_aim, set from its
+     * script events in gf_coop_mission.c) the PC free aim steps aside and the classic layout applies: RMB = L1 lock-on, the
+     * mouse = right stick (adjusts the aim while locked: "Disarming"), LMB = R1, MMB / Z = R3 (the free-aim step). Switches
+     * only with RMB up and free aim off, so the R3 toggle never desyncs. Log [aim] v1119L. */
+    static int s_classic_eff = 0;
+    if (g_gf_classic_aim != s_classic_eff && !s_fa_busy_pub && !KD(VK_RBUTTON)) {
+        s_classic_eff = g_gf_classic_aim;
+        printf("[aim] v1119L classic aiming %s (Monk's lesson)\n", s_classic_eff ? "ON: RMB = lock-on, MMB / Z = free aim" : "off: back to PC free aim"); fflush(stdout);
+    }
+    const int fa_now = fa_on && !s_classic_eff;
+    const int fa_gun = fa_now && cmb_gun == 1 && !s_free;
+    /* v1053M: gun selected but holstered + RMB = draw it (d-pad UP) and free-aim, never the game's L1 lock-on aim.
+     * PAD_KBM_RMB_DRAW=0 = old (RMB = melee lock-on while the gun is away). */
+    static int rmb_draw = -1; if (rmb_draw < 0) rmb_draw = pad_envi("PAD_KBM_RMB_DRAW", 1);
+    /* v1053N2: only a gun the player is pulling out RIGHT NOW counts -- selected in the wheel within GF_GUN_INTENT_MS
+     * (gf_combat.c returns 2) or a draw requested (H, d-pad UP keys) within PAD_KBM_DRAW_INTENT_MS (1500). A gun that
+     * stays holstered keeps RMB = the melee lock-on. */
+    static int draw_win = -1; if (draw_win < 0) draw_win = pad_envi("PAD_KBM_DRAW_INTENT_MS", 1500);
+    const int hol = (rmb_draw && fa_now && !fa_gun && !s_free && !mot && g_pad_gun_holstered_fn) ? g_pad_gun_holstered_fn() : 0;
+    if (hol && !KD(VK_RBUTTON) && (KD(VK_UP) || KD('1'))) s_draw_req_ms = pad_now_ms();
+    static int s_gh_hold = 0;   /* keeps the decision for the whole RMB hold */
+    if (!KD(VK_RBUTTON)) s_gh_hold = 0;
+    else if (!s_gh_hold && hol) s_gh_hold = (hol == 2 || pad_now_ms() - s_draw_req_ms < (unsigned long long)draw_win) ? 1 : 2;
+    const int gun_hol = hol && s_gh_hold == 1;
+    const int cmb_fist = cmb_gun == 0 && !s_free && !mot && KD(VK_RBUTTON) && !gun_hol && !ov_mouse;   /* v1053M: not with a holstered gun; v1110V not in our pages */
+    const int cmb_grab = cmb_fist && KD(VK_LBUTTON) && !s_lmb_block;
+    static int s_fa_act = 0;   /* v1044B: free aim currently on (mouse sensitivity below) */
+    static int s_lock_act = 0; /* v1044K: RMB lock-on phase (mouse does not drive the stick) */
+    { extern volatile int g_pad_fa_act; g_pad_fa_act = s_fa_act; }   /* v1044E: ppu_loader [getstick-chain] tag */
+    for (int i = 0; i < s_kbm_nbinds; i++) {
+        const int vk = s_kbm_binds[i].vk;
+        if (cmb_fist && (vk == VK_LSHIFT || vk == VK_RSHIFT)) continue;   /* v1130E */
+        if ((vk == VK_UP || vk == VK_DOWN || vk == VK_LEFT || vk == VK_RIGHT) && cmb_gun >= 0 && !s_shop_ptr && !(g_pad_menu_fn && g_pad_menu_fn())) continue;   /* v1130G: in game the arrows are the right stick (EA PC); v1130R: d-pad on the buy screen */
+        if (cmb_grab && (vk == 'Q' || vk == 'E')) continue;
+        if (mot && (vk == VK_SPACE || vk == 'E' || vk == 'W' || vk == 'A' || vk == 'S' || vk == 'D' || vk == VK_LCONTROL || vk == VK_RCONTROL)) continue;
+        if ((vk == VK_LBUTTON || vk == VK_RBUTTON || vk == VK_MBUTTON || vk == VK_XBUTTON1 || vk == VK_XBUTTON2) &&
+            (s_free || mcur || ov_mouse || s_shop_ptr || (vk == VK_LBUTTON && s_lmb_block))) continue;   /* v1110V ov_mouse; v1130Q s_shop_ptr */
+        if (s_shop_ptr && (vk == VK_RETURN || vk == VK_BACK)) continue;   /* v1130Q: buy / exit pulses below */
+        if ((fa_gun || gun_hol) && vk == VK_RBUTTON) continue;   /* v1044A: RMB = free aim with a gun (v1053M: also a holstered one) */
+        if (vk == 'B' && g_pad_camcycle_fn) continue;   /* v1046V: V = camera view (tap) / L3 (hold), below */
+        if (mcur && s_menu_qe && (vk == 'Q' || vk == 'E')) continue;   /* v1107Z: Q / E = tabs in menus, below */
+        if (KD(vk)) btns |= s_kbm_binds[i].btn;
+    }
+    { extern volatile int g_gf_menu_want; g_gf_menu_want = mcur; }   /* v1107V: frame probe finds the menu */
+    g_gf_menu_glyphs = (mcur && s_menu_qe) || s_shop_ptr;   /* v1130Q: PC Classic menu atlas = no d-pad buttons */
+    /* v1130R client coordinates (the first version used window-screenshot ones, 31 px too low). At 1280x720 client:
+     * bars y 518..542, SALIR x 290..600, COMPRAR x 678..988; quantity arrows x ~825, up 340..354 / down 354..370;
+     * the Yes / No pop-up (x 517..762): SI y ~330..352, NO y ~358..382 -> walk there (up / down) and confirm (right, = Enter). */
+    { static unsigned long long sp_t = 0; static u16 sp_q[4]; static int sp_n = 0, sp_i = 0, sp_ph = 0; static int pl = 0, pe = 0, pb = 0;
+      const unsigned long long tn = pad_now_ms();
+      if (s_shop_ptr) {
+          u16 hit = 0, hit2 = 0; const int l = KD(VK_LBUTTON), en = KD(VK_RETURN), bk = KD(VK_BACK);
+          if (l && !pl) {
+              HWND fw = GetForegroundWindow(); POINT cp; RECT cr;
+              if (fw && GetCursorPos(&cp) && ScreenToClient(fw, &cp) && GetClientRect(fw, &cr) && cr.right > 0 && cr.bottom > 0) {
+                  const float x = (float)cp.x / (float)cr.right * 1280.0f, y = (float)cp.y / (float)cr.bottom * 720.0f;
+                  const char* what = "nothing";
+                  if (y >= 508.0f && y <= 552.0f && x >= 284.0f && x < 640.0f) { hit = CELL_PAD_CTRL_LEFT; what = "exit"; }   /* v1130S: + the gold left arrow */
+                  else if (y >= 508.0f && y <= 552.0f && x >= 640.0f && x <= 994.0f) { hit = CELL_PAD_CTRL_RIGHT; what = "buy"; }   /* + the gold right arrow */
+                  /* v1130S quantity: the whole "VENTA: n" line and its arrows (x 800..990): upper half = +1, lower half = -1 */
+                  else if (x >= 800.0f && x <= 990.0f && y >= 334.0f && y < 354.0f) { hit = CELL_PAD_CTRL_UP; what = "quantity +"; }
+                  else if (x >= 800.0f && x <= 990.0f && y >= 354.0f && y <= 376.0f) { hit = CELL_PAD_CTRL_DOWN; what = "quantity -"; }
+                  if (s_shop_popup && !(y >= 508.0f && y <= 552.0f)) {   /* v1130R the pop-up: walk to the line, confirm with Cross (v1130T: the bars stay clickable -- bribe and other F2F menus) */
+                      hit = 0; what = "nothing";
+                      if (x >= 517.0f && x <= 763.0f && y >= 326.0f && y < 355.0f) { hit = CELL_PAD_CTRL_UP; hit2 = CELL_PAD_CTRL_CROSS; what = "yes"; }
+                      else if (x >= 517.0f && x <= 763.0f && y >= 355.0f && y <= 386.0f) { hit = CELL_PAD_CTRL_DOWN; hit2 = CELL_PAD_CTRL_CROSS; what = "no"; }
+                  }
+                  printf("[cellPad] v1130R buy screen click %.0f,%.0f -> %s\n", x, y, what); fflush(stdout);
+              }
+          }
+          if (en && !pe) hit = s_shop_popup ? CELL_PAD_CTRL_CROSS : CELL_PAD_CTRL_RIGHT;   /* v1130R: Enter = confirm in the pop-up */
+          if (bk && !pb) hit = s_shop_popup ? CELL_PAD_CTRL_CIRCLE : CELL_PAD_CTRL_LEFT;
+          if (raw_wheel) hit = raw_wheel > 0 ? CELL_PAD_CTRL_UP : CELL_PAD_CTRL_DOWN;
+          if (hit) { sp_q[0] = hit; sp_q[1] = hit2; sp_n = hit2 ? 2 : 1; sp_i = 0; sp_ph = 0; sp_t = tn; }
+          pl = l; pe = en; pb = bk;
+      } else { pl = KD(VK_LBUTTON); pe = KD(VK_RETURN); pb = KD(VK_BACK); }
+      /* each queued press: 90 ms down, 90 ms up */
+      if (sp_i < sp_n) {
+          if (sp_ph == 0) { if (tn - sp_t < 90ull) btns |= sp_q[sp_i]; else { sp_ph = 1; sp_t = tn; } }
+          else if (tn - sp_t >= 90ull) { sp_i++; sp_ph = 0; sp_t = tn; }
+      } }
+    if (mcur && s_menu_qe) { if (KD('Q')) btns |= CELL_PAD_CTRL_L1; if (KD('E')) btns |= CELL_PAD_CTRL_R1; }   /* v1107Z tabs */
+    if (mcur) {   /* v1107U menu clicks; v1107V point-and-click */
+        pad_menu_mouse(KD(VK_LBUTTON));   /* v1107X: pulses go out through cellPadGetData (pad_menu_getdata_step) */
+        if (KD(VK_LBUTTON)) s_lmb_block = 1;   /* a click that closes the menu is not a shot */
+        if (KD(VK_RBUTTON)) btns |= CELL_PAD_CTRL_CIRCLE;
+        /* v1107X wheel: one d-pad pulse per notch through the same paced queue (was a 70 ms hold) */
+        if (raw_wheel && !s_mm_drive) { const int notches = (int)((raw_wheel < 0 ? -raw_wheel : raw_wheel) + 119) / 120;
+            mm_push(raw_wheel > 0 ? CELL_PAD_CTRL_UP : CELL_PAD_CTRL_DOWN, notches < 1 ? 1 : notches); }
+    } else pad_menu_reset();
+    if (gun_hol && KD(VK_RBUTTON) && !ov_mouse) {   /* v1053M: draw the selected gun; free aim follows (v1053L latch gap) */
+        btns |= CELL_PAD_CTRL_UP;
+        static unsigned long long nd = 0; const unsigned long long t = pad_now_ms();
+        if (t - nd > 1000ull) { printf("[aim] v1053M RMB with a holstered gun -> drawing it (no lock-on), free aim follows\n"); fflush(stdout); }
+        nd = t;
+    }
+    { static int vprev = 0, vhold = 0, hold_ms = -1; static unsigned long long vt = 0;
+      if (hold_ms < 0) hold_ms = pad_envi("PAD_KBM_V_HOLD_MS", 300);
+      if (g_pad_camcycle_fn) {
+          const int v = KD('B'); const unsigned long long vn = pad_now_ms();   /* v1130E: B (V = R2 in the EA PC scheme) */
+          if (v && !vprev) { vt = vn; vhold = 0; }
+          if (v && !vhold && vn - vt >= (unsigned long long)hold_ms) vhold = 1;
+          if (!v && vprev && !vhold) g_pad_camcycle_fn();
+          vprev = v;
+      } }
+    { static int fa_state = 0; static unsigned long long fa_pulse_end = 0, fa_last = 0;
+      /* v1044K (user: "a combination of the two original modes"): RMB = the game's own lock-on (L1 held) -- it snaps
+       * to an NPC exactly as before; as soon as the mouse moves PAD_KBM_LOCK_BREAK (30) counts, or no target appears
+       * within PAD_KBM_LOCK_NOTARGET_MS (200), L1 is released and free aim starts (R3) facing the lock target
+       * (gf_combat.c aligns the free-aim camera); RMB release ends either. While locked the mouse does not move the
+       * stick (no zone-target flicks). PAD_KBM_ASSIST=0 = straight to free aim (v1044B). */
+      /* v1044L (user: "doesn't snap reliably"): the mouse broke the lock before the game had picked a target. Now the
+       * lock-on gets PAD_KBM_LOCK_MIN_MS (250) untouched; mouse movement only counts after that (break 40 counts);
+       * no target -> free aim after PAD_KBM_LOCK_NOTARGET_MS (350). */
+      /* v1044Q (user: "lock to the NPC like originally, but WAY easier to free aim from there; no one to aim at -> free
+       * aim"): RMB holds the game's lock-on (L1). gf_combat.c clears the stale lock-target pointer on press, so "has a
+       * target" is real now (v1044K-N saw the last NPC forever -> RMB did nothing without anyone around). No target within
+       * PAD_KBM_LOCK_NOTARGET_MS (150) -> L1 is released and free aim starts a beat later (mode 4 -> 2). Locked: counted
+       * from PAD_KBM_LOCK_MIN_MS (80) after the target appeared, PAD_KBM_LOCK_BREAK (12) mouse counts break to free aim
+       * on that target (v1044M R3-while-locked handoff). PAD_KBM_ASSIST=0 = straight to free aim. */
+      static int mode = 0, brk = -1, nt_ms = 150, asst_on = 1, min_ms = 80; static unsigned long long lock_t0 = 0, has_t = 0, gap_end = 0, lost_t = 0; static long acc = 0;
+      static int hand_ms = -1, retries = 0, retry_on = 0, gap_ms = -1; static unsigned long long handoff_end = 0, verify_at = 0;
+      if (hand_ms < 0) hand_ms = pad_envi("PAD_KBM_LOCK_HANDOFF_MS", 150);
+      if (gap_ms < 0) gap_ms = pad_envi("PAD_KBM_LOCK_GAP_MS", 120);
+      if (brk < 0) { brk = pad_envi("PAD_KBM_LOCK_BREAK", 12); nt_ms = pad_envi("PAD_KBM_LOCK_NOTARGET_MS", 150);
+                     min_ms = pad_envi("PAD_KBM_LOCK_MIN_MS", 80);
+                     /* v1044N (user: "nothing happens unless there's an NPC around", "free aim even more unreliable"):
+                      * the lock-first hybrid held L1 with a dead mouse until a target / 350 ms / 40 counts -- with no NPC
+                      * (or a stale target in player+0x1544) the press did nothing. And the R3 retry fired while free aim
+                      * WAS on (its camera just not found yet), toggling the game OFF while we thought it was ON, so every
+                      * later R3 pulse was inverted. Now: RMB = free aim at once (the v1044F mouse path the user liked),
+                      * no retry. PAD_KBM_ASSIST=1 brings the lock-first hybrid back, PAD_KBM_FA_RETRY=1 the retry. */
+                     asst_on = pad_envi("PAD_KBM_ASSIST", 0);   /* v1044T: RMB = free aim; the lock-on is done inside free aim by gf_combat.c */ retry_on = pad_envi("PAD_KBM_FA_RETRY", 0);
+                     printf("[aim] v1044T RMB = %s, R3 retry %s\n", asst_on ? "game lock-on then free aim (PAD_KBM_ASSIST=1)" : "free aim + lock on the NPC at the crosshair",
+                            retry_on ? "on" : "off"); fflush(stdout); }
+      const unsigned long long ft = pad_now_ms();
+      /* v1049F (user: "melee lock-on, then switching to a gun messes up free aim"): an RMB hold that began without a gun
+       * (melee = the game's L1 lock-on) must not start free aim when the gun comes out mid-hold -- the R3 then lands
+       * while the game is still locked on, cancels instead of starting the aim, and fa_state is inverted from then on
+       * (aims on release). Such a hold is ignored until RMB is released; the next press is clean. PAD_KBM_FA_LATCH=0 off. */
+      static int rmb_latch = 0, latch_on = -1; if (latch_on < 0) latch_on = pad_envi("PAD_KBM_FA_LATCH", 1);
+      /* v1053L (user: "target someone in melee, then pull out a pistol and free aim -> it doesn't go over to free aim, I
+       * have to press RMB again"): once the gun is out the RMB -> L1 bind is skipped (fa_gun), so the melee lock-on is
+       * already let go; after PAD_KBM_FA_LATCH_GAP_MS (250) without L1 the latch clears and the held RMB starts free aim
+       * (the same L1-off -> gap -> R3 order as the v1044S lock -> free-aim switch). 0 = old: press RMB again. */
+      static unsigned long long latch_gun_t = 0; static int latch_gap = -1;
+      if (latch_gap < 0) latch_gap = pad_envi("PAD_KBM_FA_LATCH_GAP_MS", 250);
+      if (!KD(VK_RBUTTON)) { rmb_latch = 0; latch_gun_t = 0; }
+      else if (latch_on && !fa_gun && !rmb_latch) { rmb_latch = 1; }
+      if (rmb_latch && fa_gun && latch_gap > 0) {
+          if (!latch_gun_t) { latch_gun_t = ft; printf("[aim] v1053L gun out during a melee RMB hold -- free aim in %d ms\n", latch_gap); fflush(stdout); }
+          else if (ft - latch_gun_t >= (unsigned long long)latch_gap) { rmb_latch = 0; latch_gun_t = 0; }
+      } else if (!rmb_latch) latch_gun_t = 0;
+      { static int lp = 0; if (rmb_latch && fa_gun && !lp && latch_gap <= 0) { printf("[aim] v1049F RMB held from melee -- release and press again for free aim\n"); fflush(stdout); } lp = rmb_latch && fa_gun; }
+      /* v1049S (user: "aim, run, let go of RMB, stop running -> still aiming"; "no free aim unless I hold RMB"): sprinting
+       * out of free aim desynced the R3 toggle (the game pauses free aim while sprinting and ignores R3 then). Now Shift
+       * (sprint) while RMB is held first ENDS free aim (R3, run withheld until the pulse is through), then sprints;
+       * releasing Shift with RMB still held aims again. Free aim = RMB held and not sprinting. PAD_KBM_FA_SPRINT=0 = off. */
+      static int sp_on = -1; if (sp_on < 0) sp_on = pad_envi("PAD_KBM_FA_SPRINT", 1);
+      const int fa_sprint = sp_on && (KD(VK_LSHIFT) || KD(VK_RSHIFT));
+      const int rmb = fa_gun && KD(VK_RBUTTON) && !rmb_latch && !fa_sprint && !ov_mouse;   /* v1110V */
+      s_fa_busy_pub = fa_state;   /* v1119L (last poll's state) */
+      if (!fa_now || cmb_gun != 1) { fa_state = 0; mode = 0; }  /* gun put away / swapped: the game leaves free aim itself */
+      else {
+          if (mode == 0 && rmb) {
+              if (asst_on && g_pad_aim_acq_fn) { mode = 1; lock_t0 = ft; has_t = 0; lost_t = 0; acc = 0; g_pad_aim_acq_fn(1);
+                  printf("[aim] v1044K RMB: lock-on\n"); fflush(stdout); }
+              else { mode = 2; if (g_pad_aim_acq_fn) { g_pad_aim_acq_fn(1); g_pad_aim_acq_fn(2); } }   /* v1044N: clear any old target first */
+          }
+          if (mode == 1) {
+              if (!rmb) mode = 0;
+              else {
+                  const int has = g_pad_aim_acq_fn ? g_pad_aim_acq_fn(0) : 0;
+                  if (has && !has_t) { has_t = ft; printf("[aim] v1044Q locked on after %llu ms\n", ft - lock_t0); fflush(stdout); }
+                  /* v1044R: once locked, the mouse keeps counting even if the target drops (dies / leaves range) --
+                   * v1044Q stopped counting then and the player was stuck in lock mode with a dead mouse */
+                  const int settled = has_t && ft - has_t >= (unsigned long long)min_ms;
+                  if (has) lost_t = 0; else if (has_t && !lost_t) lost_t = ft;
+                  if (settled) acc += (raw_dx < 0 ? -raw_dx : raw_dx) + (raw_dy < 0 ? -raw_dy : raw_dy); else acc = 0;
+                  if (settled && acc >= brk) {
+                      /* v1044S (user: "locked on, try to free aim -> he just stops aiming; let go of RMB -> he starts
+                       * aiming until I press Z, reversed"): R3 pressed WHILE L1 is held cancels the aim in this game, but
+                       * fa_state was set to 1, so the release pulse then turned free aim ON. Now the lock -> free aim
+                       * switch is the same sequence as the no-target case, which the logs show working: let go of L1,
+                       * wait PAD_KBM_LOCK_GAP_MS (120), then the normal R3 pulse (mode 4 -> 2). The snap still aims the
+                       * new free-aim camera at the locked target (g_pad_aim_acq_fn(2) keeps it). */
+                      mode = 4; gap_end = ft + (unsigned long long)gap_ms; g_pad_aim_acq_fn(2);
+                      printf("[aim] v1044S -> free aim from the lock (mouse moved): L1 off, R3 in %d ms\n", gap_ms); fflush(stdout);
+                  } else if ((!has_t && ft - lock_t0 >= (unsigned long long)nt_ms) ||
+                             (lost_t && ft - lost_t >= (unsigned long long)nt_ms)) {   /* v1044R: lock lost -> free aim too */
+                      /* nobody to lock on to: let go of L1, free aim a beat later (mode 4 -> 2) */
+                      mode = 4; gap_end = ft + (unsigned long long)gap_ms; g_pad_aim_acq_fn(2);
+                      printf("[aim] v1044Q no target -> free aim\n"); fflush(stdout);
+                  }
+              }
+          }
+          if (mode == 4) {
+              if (!rmb) mode = 0;
+              else if (ft >= gap_end) mode = 2;
+          }
+          if (mode == 3) {
+              if (!rmb) mode = 0;
+              else if (ft >= handoff_end) { mode = 2; verify_at = ft + 400ull; retries = 0; }
+          }
+          /* v1044M: free aim not up 400 ms after the handoff (no free-aim camera) -> the R3 did not take: press it once more */
+          if (retry_on && mode == 2 && rmb && fa_state && retries < 1 && ft >= verify_at && g_pad_aim_acq_fn && !g_pad_aim_acq_fn(3) &&
+              ft - fa_last >= 180ull) {
+              retries++; fa_last = ft; fa_pulse_end = ft + 90ull; verify_at = ft + 400ull;
+              printf("[aim] v1044M free aim did not start -> R3 again\n"); fflush(stdout);
+          }
+          if (mode == 2 && !rmb) mode = 0;
+          const int want = (mode == 2 || mode == 3);   /* mode 4 (gap after a no-target L1) keeps the current state */
+          if (want != fa_state && ft - fa_last >= 180ull) {   /* toggle the game's free aim with a short R3 pulse */
+              fa_state = want; fa_last = ft; fa_pulse_end = ft + 90ull;
+              printf("[aim] v1044A free aim %s (R3 pulse)%s\n", want ? "ON" : "OFF", (!want && fa_sprint) ? " -- sprint" : ""); fflush(stdout);
+          }
+          /* v1049S: no run until the game has left free aim (R3 through + 150 ms) */
+          if (fa_sprint && (fa_state || ft < fa_pulse_end + 150ull)) btns &= ~CELL_PAD_CTRL_CROSS;
+      }
+      if (mode == 1 || mode == 3) btns |= CELL_PAD_CTRL_L1;
+      s_lock_act = (mode == 1 || mode == 3 || mode == 4);   /* v1044S: no camera turn during the L1 -> R3 gap either */
+      if (ft < fa_pulse_end) btns |= CELL_PAD_CTRL_R3;
+      { static int gl = -1; if (gl < 0) gl = pad_envi("PAD_KBM_GUN_LOCK", 0);   /* v1053F (user): no game lock-on with a gun */
+        if (gl && fa_now && cmb_gun == 1 && KD('T')) btns |= CELL_PAD_CTRL_L1; }   /* v1044A: T = old lock-on (PAD_KBM_GUN_LOCK=1) */
+      s_fa_act = fa_state; }
+    int cmb_rs = 0; float cmb_rx = 0.0f, cmb_ry = 0.0f;
+    /* v1130E EA PC combat (the original PC port's prompts): with the target locked (RMB):
+     *   mouse forward = quick attack (stick up); mouse back, then forward = power attack; Q / E = quick attack (hooks);
+     *   Shift + Q / E (held, release) = power attack; Caps Lock = block; X = strangle (L3); LMB + RMB = grab;
+     *   grabbed: mouse forward / Q / E = grab attack, mouse left / right = shake + throw, arrow keys = drag (right stick).
+     * Gesture size PAD_KBM_GESTURE_PX (60 px within 150 ms gaps), flick length PAD_KBM_FLICK_MS (90), power PAD_KBM_POWER_MS (140). */
+    { static int gpx = -1, flick_ms = 90, power_ms = 140;
+      if (gpx < 0) { gpx = pad_envi("PAD_KBM_GESTURE_PX", 60); flick_ms = pad_envi("PAD_KBM_FLICK_MS", 90); power_ms = pad_envi("PAD_KBM_POWER_MS", 140); }
+      static float acx = 0.0f, acy = 0.0f; static unsigned long long m_t = 0, ch_until = 0, fl_end = 0; static float fl_x = 0.0f, fl_y = 0.0f;
+      static int pq = 0, pe = 0, rst = 0; static float rst_x = 0.0f; static unsigned long long rst_t0 = 0; static int down_ms = -1;
+      if (down_ms < 0) down_ms = pad_envi("PAD_KBM_POWER_DOWN_MS", 300);   /* v1130N: minimum charge (stick down) of a Shift+Q/E power attack */
+      const unsigned long long t = pad_now_ms();
+      if (cmb_fist) {
+          /* v1130K EA PC (StrategyWiki controls page): Q / E / Numpad 7 8 9 = quick attack up-left / up / up-right, + Shift = power */
+          const int n8 = KD(VK_NUMPAD8);
+          const int shift = KD(VK_LSHIFT) || KD(VK_RSHIFT), q = KD('Q') || KD(VK_NUMPAD7) || n8, e = KD('E') || KD(VK_NUMPAD9) || n8;
+          if (raw_dx || raw_dy) { if (t - m_t > 150ull) acx = acy = 0.0f; m_t = t; acx += (float)raw_dx; acy += (s_inv ? -(float)raw_dy : (float)raw_dy); }
+          if (acy < -(float)gpx) {        /* forward */
+              const int pw = t < ch_until && !cmb_grab;
+              fl_end = t + (unsigned long long)(pw ? power_ms : flick_ms); fl_x = 0.0f; fl_y = -127.0f; ch_until = 0; acx = acy = 0.0f;
+          } else if (acy > (float)gpx && !cmb_grab) { ch_until = t + 600ull; acx = acy = 0.0f; }   /* pull back = charge */
+          else if (acy > (float)gpx && cmb_grab) { ch_until = t + 600ull; acx = acy = 0.0f; }   /* v1130J: towards you while grabbing = threaten (stick back), EA PC */
+          else if (cmb_grab && (acx < -(float)gpx || acx > (float)gpx)) {   /* shake / throw */
+              const int left = acx < 0.0f; if (left) pad_motion_trigger(MOT_LEFT); else pad_motion_trigger(MOT_RIGHT);
+              fl_end = t + 250ull; fl_x = left ? -127.0f : 127.0f; fl_y = 0.0f; acx = acy = 0.0f;
+          }
+          if (cmb_grab && !rst && shift && ((q && !pq) || (e && !pe))) { rst = 1; rst_t0 = t; rst_x = q && !e ? 90.0f : (e && !q ? -90.0f : 0.0f); }   /* v1130T: Shift+Q/E grabbing = threaten (stick back) ...; v1130U Q left fist (up-right), E right fist (up-left) */
+          else if (cmb_grab && rst) {
+              if (!(q || e) || !shift) { rst = 0; fl_end = t + (unsigned long long)power_ms; fl_x = rst_x; fl_y = rst_x != 0.0f ? -90.0f : -127.0f;   /* ... punch on release of Q/E or Shift (v1130V: diagonal on the fist's side) */
+                  printf("[combat] v1130T grab power punch %s (%llu ms threaten)\n", rst_x > 0.0f ? "left fist" : rst_x < 0.0f ? "right fist" : "both", t - rst_t0); fflush(stdout); }
+          } else if (cmb_grab) {
+              /* v1130O: Q / E while grabbing = up-left / up-right too (the grab attacks / hooks the tutorial asks for) */
+              if (q && !pq) { fl_end = t + (unsigned long long)flick_ms; fl_x = e ? 0.0f : 90.0f; fl_y = -90.0f; printf("[combat] v1130O grab attack Q\n"); fflush(stdout); }
+              if (e && !pe) { fl_end = t + (unsigned long long)flick_ms; fl_x = q ? 0.0f : -90.0f; fl_y = -90.0f; printf("[combat] v1130O grab attack E\n"); fflush(stdout); }
+          } else if (!rst && shift && ((q && !pq) || (e && !pe))) { rst = 1; rst_t0 = t; rst_x = q && !e ? 90.0f : (e && !q ? -90.0f : 0.0f); }   /* v1130U: Q = left fist (up-right = left hook in this game), E = right; v1130N: Shift+Q/E press = power attack: stick down (charge) ... */
+          else if (rst && (!(q || e) || !shift) && t - rst_t0 >= (unsigned long long)down_ms) {   /* v1130T: releasing Shift fires too */   /* ... held at least PAD_KBM_POWER_DOWN_MS (longer while the key is held = charge), then up */
+              rst = 0; fl_end = t + (unsigned long long)power_ms; fl_x = rst_x; fl_y = -127.0f;
+              printf("[combat] v1130N power attack (%llu ms charge)\n", t - rst_t0); fflush(stdout); }
+          else if ((q && !pq) || (e && !pe)) { fl_end = t + (unsigned long long)flick_ms; fl_x = q && !e ? 90.0f : (e && !q ? -90.0f : 0.0f); fl_y = q && e ? -127.0f : -90.0f;
+              printf("[combat] v1130O quick attack %s\n", q && !e ? "Q (up-right, left fist)" : e && !q ? "E (up-left, right fist)" : "up"); fflush(stdout); }
+          pq = q; pe = e;
+          const int ku = KD(VK_UP), kd = KD(VK_DOWN), kl = KD(VK_LEFT), kr = KD(VK_RIGHT);
+          if (ku || kd || kl || kr) { cmb_rs = 1; cmb_rx = (float)(kr - kl) * 127.0f; cmb_ry = (float)(kd - ku) * 127.0f; }   /* arrows = right stick */
+          else if (rst || t < ch_until) { cmb_rs = 1; static int gtx = -1, gty = 64; if (gtx < 0) { gtx = pad_envi("PAD_KBM_GRAB_TX", 110); gty = pad_envi("PAD_KBM_GRAB_TY", 64); }   /* v1130Y: the threaten stick decides the raised fist; 45 deg read as plain 'down' */
+              const int gs = rst && cmb_grab && rst_x != 0.0f;
+              cmb_rx = gs ? (rst_x > 0.0f ? (float)gtx : -(float)gtx) : 0.0f; cmb_ry = gs ? (float)gty : 127.0f; }   /* v1130V: grab threaten pulled back to the fist's side */
+          else if (t < fl_end) { cmb_rs = 1; cmb_rx = fl_x; cmb_ry = fl_y; }
+          else cmb_rs = 2;                                                              /* centred, mouse muted */
+      } else { pq = pe = rst = 0; fl_end = ch_until = 0; acx = acy = 0.0f; }
+    }
+    /* v1042G layout (matches the rewritten prompts, gf_prompts.c): X+W forward, X+S towards you, X+A / X+D left / right,
+     * X+SPACE up (lift while grabbing = LMB/R1 held, otherwise rotate up), X+CTRL down and in (with A / D: down-left /
+     * down-right), X+E twist. */
+    { const int cur[7] = { KD('W'), KD('S'), KD('A'), KD('D'), KD(VK_SPACE), KD('E'), KD(VK_LCONTROL) || KD(VK_RCONTROL) };
+      const int grab = ((btns | (merge ? hs->buttons : 0)) & CELL_PAD_CTRL_R1) != 0;
+      /* v1043K (user): while grabbing, a plain TAP of X (no other gesture key during the hold, released within
+       * PAD_KBM_XLIFT_MS = 500 ms) = lift / pick up (was X+SPACE, which still works). Fired on release so X+W / X+A ...
+       * do not lift first. PAD_KBM_XLIFT=0 = off. */
+      { static int xl_on = -1, xl_ms = 500; static int x_prev = 0, x_used = 0, x_grab = 0; static unsigned long long x_t0 = 0;
+        if (xl_on < 0) { xl_on = pad_envi("PAD_KBM_XLIFT", 1); xl_ms = pad_envi("PAD_KBM_XLIFT_MS", 500); }
+        const unsigned long long xt = pad_now_ms();
+        if (mot && !x_prev) { x_t0 = xt; x_used = 0; x_grab = 0; }
+        if (mot) { for (int i = 0; i < 7; i++) if (cur[i]) x_used = 1; if (grab) x_grab = 1; }
+        if (!mot && x_prev && xl_on && x_grab && grab && !x_used && xt - x_t0 <= (unsigned long long)xl_ms) {
+            pad_motion_trigger(MOT_LIFT);
+            printf("[motion] v1043K X tap while grabbing -> lift\n"); fflush(stdout);
+        }
+        x_prev = mot; }
+      if (mot) {
+          const int ctrl = cur[6];
+          if (cur[0] && !s_mprev[0]) pad_motion_trigger(MOT_FORWARD);
+          if (cur[1] && !s_mprev[1]) pad_motion_trigger(MOT_BACK);
+          if (cur[2] && !s_mprev[2]) pad_motion_trigger(ctrl ? MOT_KNEE_L : MOT_LEFT);
+          if (cur[3] && !s_mprev[3]) pad_motion_trigger(ctrl ? MOT_KNEE_R : MOT_RIGHT);
+          if (cur[4] && !s_mprev[4]) pad_motion_trigger(grab ? MOT_LIFT : MOT_TILT);
+          if (cur[5] && !s_mprev[5]) pad_motion_trigger(MOT_TWIST);
+          if (ctrl && !s_mprev[6]) pad_motion_trigger(cur[2] ? MOT_KNEE_L : cur[3] ? MOT_KNEE_R : MOT_DOWN);
+      }
+      /* v1046A (user: "slams on SPACE instead of X+W"): while grabbing (R1 held), a plain SPACE press = the forward
+       * gesture (wall slam / push / toss over a ledge), and SPACE's normal Cross button is withheld during the grab.
+       * X+W still works. PAD_KBM_SPACE_SLAM=0 = off. */
+      { static int sp_on = -1, sp_prev = 0; if (sp_on < 0) sp_on = pad_envi("PAD_KBM_SPACE_SLAM", 0);   /* v1130H: off -- EA PC slams with W */
+        const int sp = KD(VK_SPACE);
+        if (sp_on && !mot && grab) {
+            if (sp && !sp_prev) { pad_motion_trigger(MOT_FORWARD); printf("[motion] v1046A SPACE while grabbing -> slam\n"); fflush(stdout); }
+            if (sp) btns &= ~(CELL_PAD_CTRL_CROSS | CELL_PAD_CTRL_TRIANGLE);   /* v1130E: Space = Triangle */
+        }
+        sp_prev = sp; }
+      /* v1049Q (user: prompt says Q/E slams to the sides, but only X+A / X+D did): while grabbing (R1 held), Q / E = the
+       * left / right gesture (the same as X+A / X+D: side slam / swing), and Q's L2 (weapon wheel) / E's Triangle are
+       * withheld during the grab. PAD_KBM_GRAB_QE=0 = off. */
+      { static int qe_on = -1, q_prev = 0, e_prev = 0; if (qe_on < 0) qe_on = pad_envi("PAD_KBM_GRAB_QE", 0);   /* v1130E: Q / E while grabbing = grab attack (EA PC) */
+        const int q = KD('Q'), e = KD('E');
+        if (qe_on && !mot && grab) {
+            if (q && !q_prev) { pad_motion_trigger(MOT_LEFT);  printf("[motion] v1049Q Q while grabbing -> slam left\n");  fflush(stdout); }
+            if (e && !e_prev) { pad_motion_trigger(MOT_RIGHT); printf("[motion] v1049Q E while grabbing -> slam right\n"); fflush(stdout); }
+            if (q) btns &= ~CELL_PAD_CTRL_L2;
+            if (e) btns &= ~CELL_PAD_CTRL_TRIANGLE;
+        }
+        q_prev = q; e_prev = e; }
+      for (int i = 0; i < 7; i++) s_mprev[i] = cur[i]; }
+    /* v1130F EA-style gestures (no modifier key; the EA PC port has no SIXAXIS, these moves map onto its keys):
+     *   grabbing (RMB + LMB): S = lift, W = forward (wall slam / over a ledge), mouse towards you = back (in the mouse block
+     *   above), mouse left / right = swing / throw (above), Ctrl = knee (Ctrl+A / Ctrl+D = knee left / right),
+     *   Y = twist (garrote neck snap), S tap = lift, mouse back = threaten. WASD keep moving the player while grabbing.
+     *   locked on (RMB) without a grab: Ctrl = down; with a gun drawn also Q / E = left / right (pistol whip), Space = tilt.
+     * An optional gesture key (PAD_MOTION_KEY=G, off by default) still works on top. PAD_KBM_EA_GESTURES=0 = off. Log [motion] v1130F. */
+    static int s_ea_grab = 0;
+    { static int on = -1; static int pw = 0, ps = 0, pc = 0, pe = 0, pq = 0, psp = 0, pa = 0, pd = 0;
+      if (on < 0) on = pad_envi("PAD_KBM_EA_GESTURES", 1);
+      const int rmb = KD(VK_RBUTTON) && !s_free && !ov_mouse && !mot;
+      const int w = KD('W'), s = KD('S'), c = KD(VK_LCONTROL) || KD(VK_RCONTROL), e = KD('E'), q = KD('Q'), sp = KD(VK_SPACE);
+      s_ea_grab = on && cmb_grab;
+      if (on && rmb) {
+          const char* what = 0;
+          if (cmb_grab) {
+              { static unsigned long long s_t0 = 0; static int s_hold = 0;   /* v1130J: S TAP = lift (holding S walks back: no headbutt) */
+                const unsigned long long tn = pad_now_ms();
+                if (s && !ps) { s_t0 = tn; s_hold = 1; }
+                if (!s && ps && s_hold && tn - s_t0 <= 200ull) { pad_motion_trigger(MOT_LIFT); what = "S tap -> lift"; }
+                if (!s) s_hold = 0; }
+              if (w && !pw) { pad_motion_trigger(MOT_FORWARD); what = "W -> forward"; }
+              { static int py = 0; const int y = KD('Y');   /* v1130J: Y = twist (garrote neck snap); E stays the grab attack */
+                if (y && !py) { pad_motion_trigger(MOT_TWIST); what = "Y -> twist"; } py = y; }
+              /* v1130AA (user: "A / D while grabbing should move"): no side gesture -- if (!c && KD('A') && !pa) { pad_motion_trigger(MOT_LEFT); what = "A -> left (slam into low objects)"; }   (EA: A / D slam) */
+              /* v1130AA (user: "A / D while grabbing should move"): no side gesture -- if (!c && KD('D') && !pd) { pad_motion_trigger(MOT_RIGHT); what = "D -> right (slam into low objects)"; } */
+          }
+          if (c && !pc) { const int a = KD('A'), d = KD('D');
+              pad_motion_trigger(cmb_grab && a && !d ? MOT_KNEE_L : cmb_grab && d && !a ? MOT_KNEE_R : MOT_DOWN); what = "Ctrl -> down / knee"; }
+          if (cmb_grab && (KD('X') || KD(VK_MULTIPLY))) btns |= CELL_PAD_CTRL_L3 | CELL_PAD_CTRL_R3;   /* v1130J: X / Num* = strangle (PS3: hold L3 + R3) */
+          if (cmb_grab) { static int pl = 0, pr = 0;   /* v1130K EA PC: swing = Insert / Num4 (left), Page Up / Num6 (right) */
+              const int l = KD(VK_INSERT) || KD(VK_NUMPAD4), rr = KD(VK_PRIOR) || KD(VK_NUMPAD6);
+              if (l && !pl) { pad_motion_trigger(MOT_LEFT); what = "Insert/Num4 -> swing left"; }
+              if (rr && !pr) { pad_motion_trigger(MOT_RIGHT); what = "PgUp/Num6 -> swing right"; }
+              pl = l; pr = rr; }
+          if (!cmb_grab && cmb_gun == 1) {
+              if (q && !pq) { pad_motion_trigger(MOT_LEFT); what = "Q -> left"; }
+              if (e && !pe) { pad_motion_trigger(MOT_RIGHT); what = "E -> right"; }
+              if (sp && !psp) { pad_motion_trigger(MOT_TILT); what = "Space -> tilt"; }
+          }
+          if (what) { printf("[motion] v1130F %s\n", what); fflush(stdout); }
+      }
+      pw = w; ps = s; pc = c; pe = e; pq = q; psp = sp; pa = KD('A'); pd = KD('D'); }
+    /* v1049H (user): H = hide / unhide the weapon, R = reload. In this game d-pad DOWN holsters, d-pad UP draws the
+     * weapon -- and reloads while a gun is out. H taps DOWN when a weapon is out and UP when it is away (one 90 ms tap
+     * per press); R with a gun drawn = UP (reload) instead of its R2 (R keeps R2 / melee charge otherwise). In game only
+     * (not in menus, not during a motion gesture). PAD_KBM_HR=0 = off. */
+    { static int hr_on = -1, h_prev = 0; static unsigned long long h_end = 0; static u16 h_btn = 0;
+      if (hr_on < 0) hr_on = pad_envi("PAD_KBM_HR", 1);
+      if (hr_on && !mot && !s_free && cmb_gun >= 0) {
+          const unsigned long long ht = pad_now_ms();
+          const int h = KD('H');
+          /* v1052H (user: "H doesn't hide the gun consistently, I have to spam it 5-6 times"): the log showed every draw
+           * (UP) worked at once but a 90 ms DOWN tap rarely holstered. Now the d-pad button is HELD until the game reports
+           * the weapon state flipped (g_pad_drawn_fn), at least PAD_KBM_H_MIN_MS (60) and at most PAD_KBM_H_MAX_MS (700);
+           * pressing H again while it is held cancels. Log "[keys] v1052H ... after N ms". */
+          static int h_want = -1; static unsigned long long h_t0 = 0; static int h_min = -1, h_max = 700;
+          if (h_min < 0) { h_min = pad_envi("PAD_KBM_H_MIN_MS", 60); h_max = pad_envi("PAD_KBM_H_MAX_MS", 700); }
+          if (h && !h_prev) {
+              const int drawn = g_pad_drawn_fn ? g_pad_drawn_fn() : (cmb_gun == 1);
+              if (h_end && ht < h_end) { h_end = 0; h_want = -1; }   /* second press while holding: stop */
+              else {
+                  h_btn = drawn ? CELL_PAD_CTRL_DOWN : CELL_PAD_CTRL_UP; h_t0 = ht; h_end = ht + (unsigned long long)h_max;
+                  if (!drawn) s_draw_req_ms = ht;   /* v1053N2: H = draw -> RMB within the window aims */
+                  h_want = drawn ? 0 : 1;
+                  printf("[keys] v1049H H -> %s weapon\n", drawn ? "hide" : "draw"); fflush(stdout);
+              }
+          }
+          h_prev = h;
+          if (h_end && ht < h_end) {
+              const int now_drawn = g_pad_drawn_fn ? g_pad_drawn_fn() : -1;
+              if (now_drawn == h_want && ht - h_t0 >= (unsigned long long)h_min) {
+                  printf("[keys] v1052H weapon %s after %llu ms\n", h_want ? "drawn" : "hidden", ht - h_t0); fflush(stdout);
+                  h_end = 0;
+              } else btns |= h_btn;
+          } else if (h_end) {
+              printf("[keys] v1052H %s did not happen within %d ms\n", h_want ? "draw" : "hide", h_max); fflush(stdout);
+              h_end = 0;
+          }
+          if (cmb_gun == 1 && KD('R')) { btns &= ~CELL_PAD_CTRL_R2; btns |= CELL_PAD_CTRL_UP; }
+      } else h_prev = KD('H'); }
+    /* v1053D (user: "change driving so it's actually WASD and not shift and F", "make space the drift button instead of
+     * C"). Godfather's car: Cross = gas, Square = brake / reverse, Circle = handbrake. While driving: W = Cross,
+     * S = Square, SPACE = Circle (its Cross is withheld), A / D steer (left stick X), W / S leave the stick Y alone.
+     * Driving = a player exists, the on-foot camera (gf_footcam.c, func_00055E40) has not run for PAD_KBM_CAR_MS
+     * (250 ms), and no menu / cutscene / free-aim / grab / gesture / RMB. Shift / F / C keep working. Log [drive].
+     * PAD_KBM_CAR=0 = off. */
+    static int s_car = 0;
+    { static int car_on = -1;
+      if (car_on < 0) { car_on = pad_envi("PAD_KBM_CAR", 1);   /* v1053V: real in-car flag (g_pad_incar_fn) */ }
+      extern volatile int g_uiov_menu_open;
+      const int cutscene = g_pad_cutscene_fn && g_pad_cutscene_fn();
+      const int menu = (g_pad_menu_fn && g_pad_menu_fn()) || g_uiov_menu_open;   /* v1053V: the car flag implies a player */
+      const int car = car_on && g_pad_incar_fn && g_pad_incar_fn() && !menu && !cutscene && !mot && !s_free;   /* v1053V */
+      if (car != s_car) { s_car = car; printf("[drive] v1053D car controls %s (W gas, S brake, SPACE drift)\n", car ? "ON" : "off"); fflush(stdout); }
+      if (car) {
+          /* v1130K EA PC: Space = enter / exit (Triangle, its normal bind); handbrake = Ctrl / C / RMB; LAlt = change camera */
+          if (KD(VK_LMENU)) { btns &= ~CELL_PAD_CTRL_L2; btns |= CELL_PAD_CTRL_UP; }
+          if (KD(VK_LSHIFT) || KD(VK_RSHIFT) || KD(VK_RETURN)) btns |= CELL_PAD_CTRL_CROSS;
+          if (KD('W')) btns |= CELL_PAD_CTRL_CROSS;
+          if (KD('S')) btns |= CELL_PAD_CTRL_SQUARE;
+          /* v1130G EA PC car (D_ bindings): Up = gas, Down = brake, RMB / Ctrl = handbrake, LMB = L3, MMB = R3 */
+          if (KD(VK_UP)) btns |= CELL_PAD_CTRL_CROSS;
+          if (KD(VK_DOWN)) btns |= CELL_PAD_CTRL_SQUARE;
+          if (KD(VK_RBUTTON) || KD(VK_LCONTROL)) { btns &= ~CELL_PAD_CTRL_L1; btns |= CELL_PAD_CTRL_CIRCLE; }
+          if (KD('V')) { btns &= ~CELL_PAD_CTRL_R2; btns |= CELL_PAD_CTRL_R3; }   /* v1130X EA PC car: V = look back (R3) ... */
+          if (KD('F')) { btns &= ~CELL_PAD_CTRL_R3; btns |= CELL_PAD_CTRL_R2; }   /* ... F = shoot from the car (R2); glyphs R2 = V/F, R3 = F/V */
+          { extern float (*volatile g_pad_car_speed_fn)(void);   /* v1130T: Space gets out only when the car is (almost) stopped */
+            static int sp_log = 0; const float v = g_pad_car_speed_fn ? g_pad_car_speed_fn() : -1.0f;
+            if (KD(VK_SPACE) && !KD('T') && v > 1.5f) { btns &= ~CELL_PAD_CTRL_TRIANGLE; if (!sp_log) { sp_log = 1; printf("[drive] v1130T Space ignored while moving (%.1f m/s)\n", v); fflush(stdout); } }
+            if (!KD(VK_SPACE)) sp_log = 0; }
+          if (KD(VK_LBUTTON)) { btns &= ~CELL_PAD_CTRL_R1; btns |= CELL_PAD_CTRL_L3; }
+          if (KD(VK_MBUTTON)) { btns &= ~CELL_PAD_CTRL_DOWN; btns |= CELL_PAD_CTRL_R3; }
+      } }
+    float lx = 0.0f, ly = 0.0f;
+    /* v1043Y (user): in the main menu / pause menu WASD = d-pad (discrete steps), not the left stick. Menu = no player
+     * (g_pad_weapon_fn < 0: frontend, creator, loading) or the title's menu hook (pause). PAD_KBM_MENU_DPAD=0 = off. */
+    static int s_menu_dpad = -1; if (s_menu_dpad < 0) s_menu_dpad = pad_envi("PAD_KBM_MENU_DPAD", 1);
+    const int menu_dpad = s_menu_dpad && ((g_pad_weapon_fn && cmb_gun < 0) || (g_pad_menu_fn && g_pad_menu_fn()));
+    if (!mot && menu_dpad) {
+        if (KD('W')) btns |= CELL_PAD_CTRL_UP;    if (KD('S')) btns |= CELL_PAD_CTRL_DOWN;
+        if (KD('A')) btns |= CELL_PAD_CTRL_LEFT;  if (KD('D')) btns |= CELL_PAD_CTRL_RIGHT;
+    } else if (!mot) {
+    if (KD('A')) lx -= 1.0f;   /* v1130I: A / D still move while grabbing (the press also fires the side slam) */
+    if (KD('D')) lx += 1.0f;
+    if (KD(VK_DELETE) && !KD('A')) lx -= 1.0f;   /* v1130G EA PC: Home / End / Delete / Page Down = left stick too */
+    if (KD(VK_NEXT) && !KD('D')) lx += 1.0f;
+    if (KD(VK_HOME) && !KD('W') && !s_car) ly -= 1.0f;
+    if (KD(VK_END) && !KD('S') && !s_car) ly += 1.0f;
+    if (s_car && KD(VK_LEFT) && !KD('A')) lx -= 1.0f;    /* v1130G EA PC: arrows steer in a car */
+    if (s_car && KD(VK_RIGHT) && !KD('D')) lx += 1.0f;
+    if (KD('W') && !s_car) ly -= 1.0f;   /* v1053D: W / S are gas / brake in a car */
+    if (KD('S') && !s_car) ly += 1.0f;
+    }
+    const int moving = (lx != 0.0f || ly != 0.0f);
+    /* v1115W (user: "toggle slow walk with CTRL, not hold; sprinting cancels it"): a Ctrl PRESS toggles walking
+     * (PAD_KBM_WALK deflection) on / off; sprinting (Cross held while moving = Shift by default) turns it off.
+     * Ctrl used for an X+Ctrl move does not toggle: no toggle while X (the motion key) is held, and a toggle is
+     * undone if X goes down while that same Ctrl press is still held. Menus and the car never toggle (the car also
+     * clears it). PAD_KBM_WALK_TOGGLE=0 = the old hold-Ctrl walk. Log [walk]. */
+    static int s_wt_on = -1, s_wt = 0, s_ctrl_prev = 0, s_ctrl_flip = 0;
+    if (s_wt_on < 0) s_wt_on = pad_envi("PAD_KBM_WALK_TOGGLE", 1);
+    const int ctrl_now = KD(VK_TAB);   /* v1130E EA PC scheme: Tab toggles walking (auto-run otherwise) */
+    int walk_now;
+    if (s_wt_on) {
+        if (ctrl_now && !s_ctrl_prev && !mot && !menu_dpad && !s_car) {
+            s_wt = !s_wt; s_ctrl_flip = 1;
+            printf("[walk] v1115W walk %s (Ctrl)\n", s_wt ? "ON" : "off"); fflush(stdout);
+        }
+        if (!ctrl_now) s_ctrl_flip = 0;
+        if (mot && ctrl_now && s_ctrl_flip) {
+            s_wt = !s_wt; s_ctrl_flip = 0;
+            printf("[walk] v1115W Ctrl was for an X+Ctrl move -> walk back %s\n", s_wt ? "ON" : "off"); fflush(stdout);
+        }
+        if (s_wt && ((moving && (btns & CELL_PAD_CTRL_CROSS) && !menu_dpad) || s_car)) {
+            s_wt = 0;
+            printf("[walk] v1115W walk off (%s)\n", s_car ? "car" : "sprint"); fflush(stdout);
+        }
+        walk_now = s_wt;
+    } else {
+        walk_now = KD(VK_TAB);
+    }
+    s_ctrl_prev = ctrl_now;
+    if (moving) {
+        const float mag = walk_now ? (float)s_walk : 127.0f;
+        const float n = (lx != 0.0f && ly != 0.0f) ? 0.70710678f : 1.0f;
+        lx *= mag * n; ly *= mag * n;
+    }
+    /* mouse -> right stick: smoothed velocity, scaled so PAD_MOUSE_SPEED px/s = full deflection, plus a
+     * fixed offset past the game's stick dead zone so slow moves still turn. */
+    const int alt = KD(VK_MENU) && (KD(VK_TAB) || KD(VK_F4) || KD(VK_ESCAPE));   /* v1130L: Alt alone = L2 (weapon wheel, EA PC scheme); only Alt+Tab / F4 / Esc free the mouse */
+    const int clicks = KD(VK_LBUTTON) || KD(VK_RBUTTON) || KD(VK_MBUTTON);
+#undef KD
+    long dx = 0, dy = 0; int have_mouse = 0;
+    extern volatile int g_uiov_menu_open;
+    HWND fg = GetForegroundWindow();
+    if (fg && !alt && !s_free && !g_uiov_menu_open && !mcur && !s_shop_ptr) {   /* v1107U: !mcur = free pointer in menus; v1130Q buy screen */
+        RECT rc; POINT c, p;
+        if (GetClientRect(fg, &rc) && rc.right > 8 && rc.bottom > 8 && GetCursorPos(&p)) {
+            c.x = rc.right / 2; c.y = rc.bottom / 2; ClientToScreen(fg, &c);
+            if (g_pad_mouse_captured) {
+                if (g_pad_raw_ok) { dx = raw_dx; dy = raw_dy; }
+                else { dx = p.x - c.x; dy = p.y - c.y; }
+            }
+            if (p.x != c.x || p.y != c.y) SetCursorPos(c.x, c.y);
+            g_pad_mouse_captured = 1; have_mouse = 1;
+            /* v1043K (user: "the mouse gets unfocused when I use the dragging"): the cursor is only re-centred once per
+             * poll, so a fast drag (grab swings) could leave the window between polls. Confine it to the client area
+             * while the mouse is captured (PAD_MOUSE_CLIP=0 = off); released below when capture ends. */
+            { static int clip = -1; if (clip < 0) clip = pad_envi("PAD_MOUSE_CLIP", 1);
+              DWORD fpid = 0; GetWindowThreadProcessId(fg, &fpid);
+              if (clip && fpid == GetCurrentProcessId()) { POINT tl = {0, 0}, br = {rc.right, rc.bottom};
+                          ClientToScreen(fg, &tl); ClientToScreen(fg, &br);
+                          RECT cr = {tl.x, tl.y, br.x, br.y}, cur;
+                          if (!GetClipCursor(&cur) || cur.left != cr.left || cur.top != cr.top || cur.right != cr.right || cur.bottom != cr.bottom)
+                              ClipCursor(&cr);
+                          s_pad_clipped = 1; } }
+        }
+    }
+    if (!have_mouse && s_pad_clipped) { ClipCursor(NULL); s_pad_clipped = 0; }
+    if (!have_mouse) { g_pad_mouse_captured = 0; dx = dy = 0; }
+    { /* v1042M mouse flick while the motion key is held (PAD_MOTION_MOUSE_PX, default 60 counts) */
+      static float ax = 0.0f, ay = 0.0f; static int thr = -1;
+      if (thr < 0) { thr = pad_envi("PAD_MOTION_MOUSE_PX", 60); if (thr < 5) thr = 5; }
+      if (mot && have_mouse) {
+          const float k = (float)exp(-dt / 0.15);
+          ax = ax * k + (float)dx; ay = ay * k + (float)dy;
+          const float fx = ax < 0 ? -ax : ax, fy = ay < 0 ? -ay : ay;
+          if (fy >= (float)thr && fy >= fx)      { pad_motion_trigger(ay < 0 ? MOT_FORWARD : MOT_BACK); ax = ay = 0.0f; }
+          else if (fx >= (float)thr)             { pad_motion_trigger(ax < 0 ? MOT_LEFT : MOT_RIGHT); ax = ay = 0.0f; }
+          dx = dy = 0; s_vx = s_vy = 0.0f;      /* no camera turn while gesturing */
+      } else { ax = ay = 0.0f; }
+    }
+    /* v1044C (user: free aim "EXTREMELY slow" -- the game caps the stick turn rate): mouse X goes straight into the
+     * game's free-aim yaw (degrees, PAD_KBM_AIM_DEG per mouse count, default 0.08; PAD_KBM_AIM_DIRECT=0 = stick). */
+    int aim_direct = 0;
+    { static int on = -1; static float dpc = 0.08f;
+      if (on < 0) { on = pad_envi("PAD_KBM_AIM_DIRECT", 1); const char* e = getenv("PAD_KBM_AIM_DEG"); if (e && *e) dpc = (float)atof(e); }
+      static int iy = -1, ix = 0; if (iy < 0) { iy = pad_envi("PAD_KBM_AIM_INVY", 0); ix = pad_envi("PAD_KBM_AIM_INVX", 0); }
+      if (on && s_fa_act && have_mouse && !mot && g_pad_aim_fn)
+          aim_direct = g_pad_aim_fn((float)dx * dpc * (ix ? -1.0f : 1.0f), (float)dy * dpc * (iy ? -1.0f : 1.0f)); }
+    /* v1046L (user: on-foot mouse look "way too slow and restricted, want it like GTA"): the game's follow camera
+     * (func_0006A7F8) caps the stick turn rate, clamps the yaw offset and swings back behind the player. With KBM the
+     * mouse now sets that camera's angles directly (gf_footcam.c): GF_FOOTCAM_DEG (0.12) degrees per mouse count
+     * (scaled by the F10 mouse speed), GF_FOOTCAM_INVX / GF_FOOTCAM_INVY = 1 flip an axis, GF_FOOTCAM=0 = old stick look.
+     * Not while free-aiming, locked on, grabbing or doing a motion gesture (those keep their own mouse handling). */
+    int look_direct = 0;
+    { static int on = -1, ix = 0, iy = 0; static float dpc0 = 0.12f;
+      if (on < 0) { on = pad_envi("GF_FOOTCAM", 1); const char* e = getenv("GF_FOOTCAM_DEG"); if (e && *e) dpc0 = (float)atof(e);
+                    ix = pad_envi("GF_FOOTCAM_INVX", 0); iy = pad_envi("GF_FOOTCAM_INVY", 0); }
+      float dpc = dpc0;
+      { extern volatile int g_ui_mouse_speed; if (g_ui_mouse_speed > 0) dpc = dpc0 * (float)g_ui_mouse_speed / 450.0f; }
+      /* v1046M (user: "can't use the weapon wheel now"): holding L2 (Q) opens the weapon wheel, picked with the right
+       * stick -> while L2 is held the mouse drives the right stick again. */
+      const int wheel = (btns & CELL_PAD_CTRL_L2) != 0;
+      if (on && !wheel && !aim_direct && !s_fa_act && !s_lock_act && have_mouse && !mot && !cmb_rs && !cmb_grab && g_input_kbm == 1 && g_pad_look_fn)
+          look_direct = g_pad_look_fn((float)dx * dpc * (ix ? -1.0f : 1.0f), (float)dy * dpc * (iy ? -1.0f : 1.0f)); }
+    const float a = (float)exp(-dt / s_tau);
+    s_vx = s_vx * a + (float)((double)((aim_direct || look_direct) ? 0 : dx) / dt) * (1.0f - a);
+    s_vy = s_vy * a + (float)((double)((aim_direct || look_direct) ? 0 : dy) / dt) * (1.0f - a);
+    if (s_inv) { /* applied below */ }
+    float rx = 0.0f, ry = 0.0f;
+    /* v1044B (user: "I move the camera way too slowly in free aim"): the free-aim crosshair turns slower per stick unit than
+     * the normal camera, so while free aim is on the same mouse speed gives PAD_KBM_FREEAIM_SENS (default 3.0) times the
+     * stick deflection. If the game's own maximum free-aim turn rate is the limit, full deflection is reached sooner but
+     * cannot go faster -- then the turn rate itself needs a game-side patch. */
+    static float fa_sens = -1.0f;
+    if (fa_sens < 0.0f) { const char* e = getenv("PAD_KBM_FREEAIM_SENS"); fa_sens = (e && *e) ? (float)atof(e) : 3.0f; if (fa_sens < 0.1f) fa_sens = 0.1f; }
+    const float spd = s_fa_act ? s_speed / fa_sens : s_speed;
+    { float fx = s_vx / spd, fy = (s_inv ? -s_vy : s_vy) / spd;    /* PS3 stick: down = + */
+      const float m = sqrtf(fx * fx + fy * fy);
+      if (m > 0.01f) {
+          const float span = 127.0f - (float)s_dz;
+          float out = (float)s_dz + (m > 1.0f ? 1.0f : m) * span;
+          rx = fx / m * out; ry = fy / m * out;
+      } else { s_vx = s_vy = 0.0f; } }
+    if (aim_direct || look_direct) { rx = 0.0f; ry = 0.0f; }   /* v1044F / v1046L: the camera angles are written directly */
+    if (s_lock_act) { rx = 0.0f; ry = 0.0f; s_vx = s_vy = 0.0f; }   /* v1044K: locked on -- no zone-target flicks */
+    { /* v1043K (user): while grabbing, a quick mouse DRAG left / right = the grab swing (was Q / E; PAD_KBM_QE=1 brings
+       * the keys back): the right stick is held to that side for PAD_KBM_DRAG_MS (250) and the SIXAXIS swing gesture
+       * fires once. Threshold PAD_KBM_DRAG_PX (60 mouse counts within ~0.15 s). Only while grabbing; the mouse still does
+       * not turn the camera then. */
+      /* v1043K-2 (user: "left drag is not reliable"): threshold 60 -> 40 counts, hold 250 -> 350 ms, and the swing keeps
+       * holding while the drag continues the same way (like holding Q / E did), up to 1.2 s. */
+      static float gx = 0.0f; static int thr = -1, hold_ms = 350, sdir = 0; static unsigned long long s_until = 0, s_start = 0;
+      if (thr < 0) { thr = pad_envi("PAD_KBM_DRAG_PX", 40); if (thr < 5) thr = 5; hold_ms = pad_envi("PAD_KBM_DRAG_MS", 350); }
+      const unsigned long long gt = pad_now_ms();
+      if (cmb_grab && !mot && have_mouse) {
+          const float k = (float)exp(-dt / 0.15);
+          gx = gx * k + (float)dx;
+          if (sdir && gt >= s_until) sdir = 0;
+          if (sdir && (long)sdir * dx > 0 && gt - s_start < 1200ull) s_until = gt + (unsigned long long)hold_ms;   /* still dragging */
+          if (!sdir && (gx >= (float)thr || gx <= -(float)thr)) {
+              sdir = gx < 0.0f ? -1 : 1; s_until = gt + (unsigned long long)hold_ms; s_start = gt; gx = 0.0f;
+              pad_motion_trigger(sdir < 0 ? MOT_LEFT : MOT_RIGHT);
+              printf("[motion] v1043K grab swing %s (mouse drag)\n", sdir < 0 ? "left" : "right"); fflush(stdout);
+          }
+      } else { gx = 0.0f; sdir = 0; s_until = 0; }
+      if (sdir && gt < s_until) { cmb_rs = 1; cmb_rx = (float)sdir * 127.0f; cmb_ry = 0.0f; }
+    }
+    /* v1130G EA PC: the arrow keys are the right stick in game (camera; drag / gestures while locked on, above). Not in
+     * menus (d-pad there) or in a car (gas / brake / steer, below). */
+    if (!cmb_rs && !menu_dpad && !s_car && !s_free && !s_shop_ptr && cmb_gun >= 0) {   /* v1130R: not on the buy screen (arrows = d-pad there) */
+        const int ku = (GetAsyncKeyState(VK_UP) & 0x8000) != 0, kd = (GetAsyncKeyState(VK_DOWN) & 0x8000) != 0, kl = (GetAsyncKeyState(VK_LEFT) & 0x8000) != 0, kr = (GetAsyncKeyState(VK_RIGHT) & 0x8000) != 0;
+        if (ku || kd || kl || kr) { cmb_rs = 1; cmb_rx = (float)(kr - kl) * 127.0f; cmb_ry = (float)(kd - ku) * 127.0f; }
+    }
+    if (cmb_rs) { rx = cmb_rx; ry = cmb_ry; s_vx = s_vy = 0.0f; }   /* v1042X: locked-on melee owns the right stick */
+    const int looking = (rx != 0.0f || ry != 0.0f) || cmb_rs == 1;
+    if (btns || moving || clicks || (raw_dx < 0 ? -raw_dx : raw_dx) + (raw_dy < 0 ? -raw_dy : raw_dy) > 3) pad_note_device(1);
+    else if (g_input_kbm < 0 && !merge) pad_note_device(1);
+    { static u16 kb_prev = 0; const u16 kb = (u16)(btns & MM_MASK);   /* v1114P: a new key press beats the pointer */
+      if (s_mm_drive && (kb & ~kb_prev)) {
+          pad_menu_reset();
+          static int nl = 0; if (nl < 20) { nl++; printf("[cellPad] v1114P menu: key press -> keyboard has the menu (pointer pulses dropped)\n"); fflush(stdout); } }
+      kb_prev = kb; }
+    if (s_mm_drive) btns = (u16)((btns & ~MM_MASK) | s_mm_out | s_mm_hold);   /* v1107X: the menu pointer owns d-pad + Cross */
+    if (merge) {
+        hs->buttons |= btns;
+        if (moving)  { hs->analog_lx = pad_axis(lx); hs->analog_ly = pad_axis(ly); }
+        if (looking) { hs->analog_rx = pad_axis(rx); hs->analog_ry = pad_axis(ry); }
+        if (btns & CELL_PAD_CTRL_L2) hs->trigger_l2 = 255;
+        if (btns & CELL_PAD_CTRL_R2) hs->trigger_r2 = 255;
+    } else {
+        hs->buttons = btns; hs->connected = 1;
+        hs->analog_lx = pad_axis(lx); hs->analog_ly = pad_axis(ly);
+        hs->analog_rx = pad_axis(rx); hs->analog_ry = pad_axis(ry);
+        hs->trigger_l2 = (u8)((btns & CELL_PAD_CTRL_L2) ? 255 : 0);
+        hs->trigger_r2 = (u8)((btns & CELL_PAD_CTRL_R2) ? 255 : 0);
+    }
+    const u16 b = hs->buttons;
+    hs->press_up = (b & CELL_PAD_CTRL_UP) ? 255 : 0;             hs->press_down = (b & CELL_PAD_CTRL_DOWN) ? 255 : 0;
+    hs->press_left = (b & CELL_PAD_CTRL_LEFT) ? 255 : 0;         hs->press_right = (b & CELL_PAD_CTRL_RIGHT) ? 255 : 0;
+    hs->press_triangle = (b & CELL_PAD_CTRL_TRIANGLE) ? 255 : 0; hs->press_circle = (b & CELL_PAD_CTRL_CIRCLE) ? 255 : 0;
+    hs->press_cross = (b & CELL_PAD_CTRL_CROSS) ? 255 : 0;       hs->press_square = (b & CELL_PAD_CTRL_SQUARE) ? 255 : 0;
+    hs->press_l1 = (b & CELL_PAD_CTRL_L1) ? 255 : 0;             hs->press_r1 = (b & CELL_PAD_CTRL_R1) ? 255 : 0;
+    { static int said = 0; if (!said && (btns || moving || looking)) { said = 1;
+        printf("[cellPad] generic keyboard/mouse input active on port 0%s\n", merge ? " (merged with controller)" : ""); fflush(stdout); } }
+}
 
 static void pad_poll_keyboard(int merge)
 {
@@ -3080,6 +3854,7 @@ static void pad_poll_backend_do(void)
       if (cs && !cs_t0) cs_t0 = now;
       if (!cs) cs_t0 = 0;
       if (test_ms && cs && now - cs_t0 >= (unsigned long long)test_ms) b |= CELL_PAD_CTRL_CROSS;
+      if (cs && kbm_classic() && pad_host_window_focused() && (GetAsyncKeyState(VK_SPACE) & 0x8000)) b |= CELL_PAD_CTRL_CROSS;   /* v1130M: Space = hold to skip (Space is Triangle in the EA PC scheme) */
       if (!cs) {
           g_gf_skip_request = 0;   /* v1073H: a request without a cutscene is dropped */
           if (g_gf_ffwd) { printf("[skip] v1042V cutscene skipped, back in the game after %.1f s\n", (now - ff_t0) / 1000.0); fflush(stdout); }

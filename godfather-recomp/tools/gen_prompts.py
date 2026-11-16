@@ -17,8 +17,8 @@ DIRS=[ ('UPTOWARD', w('(?:UP TOWARDS)')+' your body'),
        ('UP',       w('(?:UP|up)')),
        ('DOWN',     w('(?:DOWN|down)')) ]
 VERB=C+r'(move|MOVE|pull|PULL|push|ROTATE|TWIST)'+R+r' the SIXAXIS\xac wireless controller '
-KBM={'FWD':'X+W','BACK':'X+S','L':'X+A','R':'X+D','LR':'X+A[c=RESET] or [c=CUSTOM1]X+D','FWDBACK':'X+W[c=RESET] and [c=CUSTOM1]X+S',
-     'UP':'X+SPACE','UPTOWARD':'X+SPACE','TILT':'X+SPACE','DOWN':'X+CTRL','KNEE':'X+CTRL','KNEE_L':'X+CTRL+A','KNEE_R':'X+CTRL+D','TWIST':'X+E'}
+KBM={'FWD':'G+W','BACK':'G+S','L':'G+A','R':'G+D','LR':'G+A[c=RESET] or [c=CUSTOM1]G+D','FWDBACK':'G+W[c=RESET] and [c=CUSTOM1]G+S',
+     'UP':'G+SPACE','UPTOWARD':'G+SPACE','TILT':'G+SPACE','DOWN':'G+CTRL','KNEE':'G+CTRL','KNEE_L':'G+CTRL+A','KNEE_R':'G+CTRL+D','TWIST':'G+E'}
 def pad(g,up):
     cu=lambda s: '[c=CUSTOM1]'+(s if up else s.lower())+'[c=RESET]'
     st='[b=Rstick]'
@@ -31,9 +31,34 @@ def pad(g,up):
             'KNEE_L':cu('HOLD')+' [LeftStickDepress] + '+cu('FLICK')+' '+st+' '+cu('LEFT'),
             'KNEE_R':cu('HOLD')+' [LeftStickDepress] + '+cu('FLICK')+' '+st+' '+cu('RIGHT'),
             'TWIST':cu('ROTATE')+' [RightStickClockwise]'}[g]
-def kbm(g,up):
-    k=KBM[g]
-    return '[c=CUSTOM1]'+('PRESS' if up else 'press')+'[c=RESET] [c=CUSTOM1]'+k+'[c=RESET]'
+def slam_keys(s):
+    """v1130H EA PC: near a low object the side slam is A / D (mouse left / right stays swing / throw)."""
+    C, R = '[c=CUSTOM1]', '[c=RESET]'
+    for v, a in (('DRAG', 'PRESS'), ('drag', 'press'), ('ARRASTRA', 'PULSA'), ('arrastra', 'pulsa'), ('ARRASTRAR', 'PULSAR'), ('arrastrar', 'pulsar')):
+        for st in (True, False):
+            V = (C + v + R) if st else v; A_ = (C + a + R) if st else a
+            K = (lambda k: C + k + R) if st else (lambda k: k)
+            for m, l, r_, o_ in ((' the mouse ', ('LEFT', 'left'), ('RIGHT', 'right'), ' or '),
+                                 (' el rat\xf3n ', ('HACIA LA IZQUIERDA', 'hacia la izquierda'), ('HACIA LA DERECHA', 'hacia la derecha'), ' o ')):
+                for L_, R2 in zip(l, r_):
+                    s = s.replace(V + m + K(L_) + o_ + K(R2), A_ + ' ' + K('A') + o_ + K('D'))
+                    s = s.replace(V + m + K(L_), A_ + ' ' + K('A')).replace(V + m + K(R2), A_ + ' ' + K('D'))
+    return s
+# v1130F EA-style gestures (no gesture key): keys / mouse while grabbing or locked on
+C_ = '[c=CUSTOM1]'; R_ = '[c=RESET]'
+def K_(s): return C_ + s + R_
+def en_phrase(g, up):
+    P=lambda v: C_+(v if up else v.lower())+R_
+    return {'FWD':P('PRESS')+' '+K_('W'), 'BACK':P('PULL')+' the mouse '+K_('BACK'),
+            'L':P('DRAG')+' the mouse '+K_('LEFT'), 'R':P('DRAG')+' the mouse '+K_('RIGHT'),
+            'LR':P('DRAG')+' the mouse '+K_('LEFT')+' or '+K_('RIGHT'),
+            'FWDBACK':P('PRESS')+' '+K_('W')+' and '+P('PULL')+' the mouse '+K_('BACK'),
+            'UP':P('PRESS')+' '+K_('S'), 'UPTOWARD':P('PRESS')+' '+K_('S'), 'TILT':P('PRESS')+' '+K_('SPACE'),
+            'DOWN':P('PRESS')+' '+K_('CTRL'), 'KNEE':P('PRESS')+' '+K_('CTRL'), 'KNEE_L':P('PRESS')+' '+K_('CTRL+A'),
+            'KNEE_R':P('PRESS')+' '+K_('CTRL+D'), 'TWIST':P('PRESS')+' '+K_('Y'), 'WHIP':P('PRESS')+' '+K_('Q')}[g]
+def kbm(g,up,t=''):
+    if g=='L' and 'drawn' in t and 'grab' not in t: g='WHIP'
+    return en_phrase(g,up)
 out=[]; bad=0
 for s in en:
     t=s.decode('latin1')
@@ -53,12 +78,13 @@ for s in en:
     up=verb.isupper()
     a,b=m.start(),m.end()+mm.end()
     styled=t[a:a+3]=='[c='
-    pp,kk=pad(g,up),kbm(g,up)
+    pp,kk=pad(g,up),kbm(g,up,t)
     if not styled:
         pp=re.sub(r'\[c=[A-Z0-9_]+\]','',pp); kk=re.sub(r'\[c=[A-Z0-9_]+\]','',kk)
     p=t[:a]+pp+t[b:]
     k=t[:a]+kk+t[b:]
     k=k.replace('[LSTop]','RMB').replace('[RSTop]','LMB')
+    if 'low object' in k: k=slam_keys(k)
     out.append((s,p.encode('latin1'),k.encode('latin1'),g))
 for s,p,k,g in out:
     ok = len(p)<=len(s) and len(k)<=len(s)

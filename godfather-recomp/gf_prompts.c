@@ -39,7 +39,14 @@ static int gfp_want_kbm(void)
     const int c = g_ui_kbm_glyphs >= 0 ? g_ui_kbm_glyphs : s_cfg;
     return c == 2 || (c != 0 && g_input_kbm > 0);
 }
-static const char* gfp_text(int idx, int kbm) { return kbm ? g_gf_prompts[idx].kbm : g_gf_prompts[idx].pad; }
+/* v1130P keyboard scheme (settings.ini KBM_SCHEME, read once): "classic" = PC Classic prompts, else Reborn */
+static int gfp_classic(void)
+{
+    static int v = -1;
+    if (v < 0) { const char* e = getenv("KBM_SCHEME"); v = (e && !_stricmp(e, "classic")) ? 1 : 0; }
+    return v;
+}
+static const char* gfp_text(int idx, int kbm) { return kbm ? (gfp_classic() ? g_gf_prompts[idx].kbm_classic : g_gf_prompts[idx].kbm) : g_gf_prompts[idx].pad; }
 
 /* write variant `kbm` of prompt idx at ea, NUL padded to the original length */
 static void gfp_write(uint32_t ea, int idx, int kbm)

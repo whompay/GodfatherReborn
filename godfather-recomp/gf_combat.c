@@ -73,6 +73,23 @@ static int incar_read(void)
     const uint32_t veh = rd32(player + 0x1718u);
     return ok(veh) && veh == rd32(player + 0x4Cu) && (rd32(player + 0x5C4u) & 0x8u) != 0;
 }
+/* v1130T car speed for cellPad.c (PC Classic: Space gets out only when stopped): position delta of the player's vehicle
+ * (player+0x1718, see incar_read) over >= 100 ms windows. -1 = no car / unknown. */
+extern int gf_rag_ent_frame(uint32_t ent, float* M9, float* T3);
+static float gf_pad_car_speed(void)
+{
+    static uint32_t lv = 0; static float lp[3], spd = 0.0f; static ULONGLONG lt = 0;
+    __try {
+        if (!incar_read()) { lv = 0; return -1.0f; }
+        uint32_t a = rd32(rd32(rd32(0x10181290u) + 4)); const uint32_t veh = rd32(a - 0x17FCu + 0x1718u);
+        float M[9], T[3]; if (!gf_rag_ent_frame(veh, M, T)) return -1.0f;
+        const ULONGLONG now = GetTickCount64();
+        if (veh != lv) { lv = veh; memcpy(lp, T, sizeof lp); lt = now; spd = 0.0f; return 0.0f; }
+        if (now - lt >= 100) { const float dx = T[0] - lp[0], dy = T[1] - lp[1], dz = T[2] - lp[2];
+            spd = sqrtf(dx * dx + dy * dy + dz * dz) / ((float)(now - lt) / 1000.0f); memcpy(lp, T, sizeof lp); lt = now; }
+        return spd;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1.0f; }
+}
 static int gf_pad_incar(void)
 {
 #ifdef _WIN32
@@ -862,6 +879,7 @@ void gf_combat_init(void)
     g_pad_weapon_fn = gf_pad_weapon;
     { extern int (*volatile g_pad_gun_holstered_fn)(void); g_pad_gun_holstered_fn = gf_pad_gun_holstered; }   /* v1053M */
     { extern int (*volatile g_pad_incar_fn)(void); g_pad_incar_fn = gf_pad_incar; }   /* v1053V */
+    { extern float (*volatile g_pad_car_speed_fn)(void); g_pad_car_speed_fn = gf_pad_car_speed; }   /* v1130T */
     g_pad_drawn_fn = gf_pad_drawn;   /* v1049H */
     { const char* pp = getenv("GF_PAUSE_PROBE"); if (!(pp && *pp == '0')) g_pad_menu_fn = gf_pad_menu; }
     g_pad_aim_fn = gf_aim;   /* v1044F */

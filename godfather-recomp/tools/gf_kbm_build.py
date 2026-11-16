@@ -43,11 +43,15 @@ def main(usr, out):
         import gf_glyphs as G, gf_glyphs_menu as M
         G.FONT = font
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        G.main('buttons.tex', out)
-        M.main(out, out, font)
+        # v1130P one atlas per keyboard scheme: <out> = "Reborn", <out>_classic.bin = "PC Classic"
+        root, ext = os.path.splitext(out)
+        for scheme, path in (('reborn', out), ('classic', root + '_classic' + ext)):
+            G.SCHEME = scheme
+            G.main('buttons.tex', path)
+            M.main(path, path, font)
     finally:
         os.chdir(cwd)
-    print(f"button prompts ({os.path.basename(font)}) -> {out}")
+    print(f"button prompts ({os.path.basename(font)}) -> {out} (+ _classic)")
 
 if __name__ == '__main__':
     if len(sys.argv) != 3: sys.exit(__doc__)

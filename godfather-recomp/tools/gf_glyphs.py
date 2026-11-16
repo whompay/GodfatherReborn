@@ -142,18 +142,18 @@ PICTO = {  # SIXAXIS pictograms: (rect, controller-mode replacement)
     'SX_RIGHT': ((428, 12, 494, 43), 'RS'), 'SX_LEFT': ((416, 67, 482, 98), 'RS'), 'SX_A': ((433, 115, 477, 140), 'RS'),
     'SX_B': ((331, 187, 385, 218), 'RS'), 'SX_C': ((426, 187, 480, 218), 'RS'),
 }
-KBM = {
-    'CROSS': lambda w, h: g_key(w, h, 'SPACE', scale=0.86), 'CIRCLE': lambda w, h: g_key(w, h, 'C'),
-    'SQUARE': lambda w, h: g_key(w, h, 'F'), 'TRIANGLE': lambda w, h: g_key(w, h, 'E'),
-    'SELECT_TXT': lambda w, h: g_text(w, h, 'TAB'), 'SELECT_BTN': lambda w, h: g_key(w, h, 'TAB', square=False, scale=0.95),
+KBM_CLASSIC = {  # v1130P "PC Classic" scheme (the original EA PC port's keys)
+    'CROSS': lambda w, h: g_key(w, h, 'SHIFT', scale=0.86), 'CIRCLE': lambda w, h: g_key(w, h, 'C'),   # v1130E EA PC scheme
+    'SQUARE': lambda w, h: g_key(w, h, 'CAPS', scale=0.86), 'TRIANGLE': lambda w, h: g_key(w, h, 'SPACE', scale=0.86),
+    'SELECT_TXT': lambda w, h: g_text(w, h, 'N'), 'SELECT_BTN': lambda w, h: g_key(w, h, 'N', square=False, scale=0.95),
     'START_TXT': lambda w, h: g_text(w, h, 'ESC'), 'START_BTN': lambda w, h: g_key(w, h, 'ESC', square=False, scale=0.95),
     'R1': lambda w, h: g_mouse(w, h, 'L'), 'L1': lambda w, h: g_mouse(w, h, 'R'),
-    'R2': lambda w, h: g_key(w, h, 'R'), 'L2': lambda w, h: g_key(w, h, 'Q'),
-    'RS': lambda w, h: g_mouse(w, h), 'LS': lambda w, h: g_wasd(w, h), 'R3_A': lambda w, h: g_mouse(w, h, 'M'),
+    'R2': lambda w, h: g_key(w, h, 'V/F', scale=0.86), 'L2': lambda w, h: g_key(w, h, 'ALT', scale=0.86),
+    'RS': lambda w, h: g_mouse(w, h), 'LS': lambda w, h: g_wasd(w, h), 'R3_A': lambda w, h: g_key(w, h, 'F/V', scale=0.86),
     'RS_U': lambda w, h: g_mouse(w, h, arrow='u'), 'LS_N': lambda w, h: g_wasd(w, h), 'LS_U': lambda w, h: g_wasd(w, h, 'W'),
-    'LS_L': lambda w, h: g_wasd(w, h, 'A'), 'LS_R': lambda w, h: g_wasd(w, h, 'D'), 'L3': lambda w, h: g_key(w, h, 'SHIFT', scale=0.86),
+    'LS_L': lambda w, h: g_wasd(w, h, 'A'), 'LS_R': lambda w, h: g_wasd(w, h, 'D'), 'L3': lambda w, h: g_key(w, h, 'X'),
     'LS_D': lambda w, h: g_wasd(w, h, 'S'), 'RS_L': lambda w, h: g_mouse(w, h, arrow='l'), 'RS_R': lambda w, h: g_mouse(w, h, arrow='r'),
-    'R3_B': lambda w, h: g_mouse(w, h, 'M'), 'RS_D': lambda w, h: g_mouse(w, h, arrow='d'), 'DPAD': lambda w, h: g_arrows(w, h),
+    'R3_B': lambda w, h: g_key(w, h, 'F/V', scale=0.86), 'RS_D': lambda w, h: g_mouse(w, h, arrow='d'), 'DPAD': lambda w, h: g_arrows(w, h),
 }
 
 def is_yellow(p): return p[3] > 40 and p[0] > 150 and p[1] > 110 and p[2] < 110 and p[0] - p[2] > 80
@@ -255,19 +255,35 @@ def enc_dxt3(img, orig_img, orig_bytes):
             p += 16
     return bytes(out)
 
+KBM = dict(KBM_CLASSIC)   # v1130P "Reborn" scheme (the port's own keys; the default)
+KBM.update({
+    'CROSS': lambda w, h: g_key(w, h, 'SPACE', scale=0.86), 'SQUARE': lambda w, h: g_key(w, h, 'F'), 'TRIANGLE': lambda w, h: g_key(w, h, 'E'),
+    'SELECT_TXT': lambda w, h: g_text(w, h, 'TAB'), 'SELECT_BTN': lambda w, h: g_key(w, h, 'TAB', square=False, scale=0.95),
+    'R2': lambda w, h: g_key(w, h, 'R'), 'L2': lambda w, h: g_key(w, h, 'Q'), 'R3_A': lambda w, h: g_mouse(w, h, 'M'),
+    'L3': lambda w, h: g_key(w, h, 'SHIFT', scale=0.86), 'R3_B': lambda w, h: g_mouse(w, h, 'M'),
+})
+SCHEME = 'reborn'   # 'classic' -> KBM_CLASSIC + PICTO_KBM (gf_kbm_build.py builds both)
+
+PICTO_KBM = {  # v1130J: the key each SIXAXIS pictogram stands for in the EA-style KBM scheme
+    'SX_LIFT': lambda W, H: g_key(W, H, 'W', scale=0.92), 'SX_ROT': lambda W, H: g_key(W, H, 'Y', scale=0.92),
+    'SX_TILT': lambda W, H: g_key(W, H, 'SPACE', scale=0.92), 'SX_RIGHT': lambda W, H: g_key(W, H, 'D', scale=0.92),
+    'SX_LEFT': lambda W, H: g_key(W, H, 'A', scale=0.92), 'SX_A': lambda W, H: g_key(W, H, 'S', scale=0.92),
+    'SX_B': lambda W, H: g_key(W, H, 'CTRL', scale=0.92), 'SX_C': lambda W, H: g_mouse(W, H, arrow='d'),
+}
+
 def main(src, outbin):
     d = open(src, 'rb').read(); w, h, fmt, nb, cs = struct.unpack('<5I', d[8:28]); raw = d[28:28 + nb]
     _, _, _, _, orig = decode(src)
     kbm = orig.copy(); pad = orig.copy()
     for name, rect in CELLS.items():
         x0, y0, x1, y1 = rect
-        paste_cell(kbm, rect, KBM[name](x1 - x0, y1 - y0))
+        paste_cell(kbm, rect, (KBM_CLASSIC if SCHEME == 'classic' else KBM)[name](x1 - x0, y1 - y0))
     rs_rect, r3_rect = CELLS['RS'], CELLS['R3_B']
     def crop_fn(rect):
         x0, y0, x1, y1 = rect; im = Image.fromarray(orig[y0:y1, x0:x1], 'RGBA')
         return lambda W, H: im.resize((W, H), Image.LANCZOS)
     for name, (rect, padg) in PICTO.items():
-        picto(kbm, orig, rect, lambda W, H: g_key(W, H, 'X', scale=0.92))
+        picto(kbm, orig, rect, PICTO_KBM[name] if SCHEME == 'classic' else (lambda W, H: g_key(W, H, 'X', scale=0.92)))   # v1130J / v1130P
         picto(pad, orig, rect, crop_fn(rs_rect if padg == 'RS' else r3_rect))
     kb = enc_dxt3(kbm, orig, raw); pb = enc_dxt3(pad, orig, raw)
     assert len(kb) == nb and len(pb) == nb
