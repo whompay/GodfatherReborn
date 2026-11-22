@@ -211,6 +211,13 @@ optional = true
 outputs = ["godfather-recomp/assets/gf_gps.bin"]
 
 [[step]]
+id = "crewdrive-roads"
+title = "Crew driver road map (lanes and heights of the road graphs)"
+run = ["{python}", "{port}/tools/gf_crewdrive_build.py", "{usrdir}", "{port}/assets/gf_crewdrive_roads.bin"]
+optional = true
+outputs = ["godfather-recomp/assets/gf_crewdrive_roads.bin"]
+
+[[step]]
 id = "wheel-atlas"
 title = "Weapon wheel icon atlas"
 run = ["{python}", "{port}/tools/gf_wheel_atlas.py", "{usrdir}"]

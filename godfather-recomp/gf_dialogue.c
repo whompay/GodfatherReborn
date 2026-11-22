@@ -315,6 +315,44 @@ static double play_line(const Line* ln, float gain)   /* returns the line's leng
     s_pos = 0; InterlockedExchangePointer((PVOID volatile*)&s_cur, c);
     return c->n / 48000.0;
 }
+/* crew driver (gf_crewdrive.c): one disc voice line (audiostreams/<dir>/<file>) on this channel, ent's mouth moves with it.
+ * Returns the line's length in seconds (0 = failed). */
+double gf_dialogue_play_stream(const char* rel, float gain, uint32_t ent)
+{
+    if (!rel || !*rel) return 0.0;
+    if (!g_audio_overlay_mix) g_audio_overlay_mix = mix;   /* GF_DIALOGUE=0: the mixer is not installed yet */
+    const size_t n = strlen(rel);
+    if (n > 4 && !_stricmp(rel + n - 4, ".wav")) {   /* a mod's own line (16-bit mono PCM) next to the disc's streams */
+        char path[MAX_PATH + 160]; snprintf(path, sizeof path, "%s/PS3_GAME/USRDIR/audiostreams/%s", ppu_vfs_root ? ppu_vfs_root : ".", rel);
+        FILE* f = fopen(path, "rb"); if (!f) { DLOG("[dialogue] cannot open %s\n", path); return 0.0; }
+        uint8_t h[12]; int rate = 0, ch = 0, bits = 0; int16_t* pcm = NULL; int np = 0;
+        if (fread(h, 1, 12, f) == 12 && !memcmp(h, "RIFF", 4) && !memcmp(h + 8, "WAVE", 4)) {
+            uint8_t c[8];
+            while (fread(c, 1, 8, f) == 8) {
+                const uint32_t sz = c[4] | (c[5] << 8) | (c[6] << 16) | ((uint32_t)c[7] << 24);
+                if (!memcmp(c, "fmt ", 4) && sz >= 16) { uint8_t fm[16]; if (fread(fm, 1, 16, f) != 16) break; fseek(f, (long)(sz - 16 + (sz & 1)), SEEK_CUR);
+                    ch = fm[2] | (fm[3] << 8); rate = fm[4] | (fm[5] << 8) | (fm[6] << 16); bits = fm[14] | (fm[15] << 8); }
+                else if (!memcmp(c, "data", 4)) { if (ch == 1 && bits == 16 && sz < 48000u * 60u * 2u) { pcm = (int16_t*)malloc(sz + 2); np = (int)(fread(pcm, 1, sz, f) / 2); } break; }
+                else fseek(f, (long)(sz + (sz & 1)), SEEK_CUR);
+            }
+        }
+        fclose(f);
+        if (!pcm || np < 2 || rate < 8000 || rate > 48000) { free(pcm); DLOG("[dialogue] %s: not a 16-bit mono WAV\n", rel); return 0.0; }
+        Pcm* o = (Pcm*)calloc(1, sizeof(Pcm));
+        const double ratio = 48000.0 / rate; o->n = (int)(np * ratio); o->s = (float*)malloc(sizeof(float) * (size_t)(o->n + 1));
+        for (int i = 0; i < o->n; i++) { const double x = i / ratio; const int a = (int)x; const float t = (float)(x - a);
+            const float s0 = pcm[a < np ? a : np - 1], s1 = pcm[a + 1 < np ? a + 1 : np - 1]; o->s[i] = (s0 + (s1 - s0) * t) * (1.0f / 32768.0f); }
+        free(pcm); o->gain = gain * s_vol;
+        InterlockedExchangePointer((PVOID volatile*)&s_cur, NULL);
+        static Pcm* last; if (last && s_ndead < 8) { s_dead[s_ndead].p = last; s_dead[s_ndead].t = GetTickCount64(); s_ndead++; } last = o;
+        s_pos = 0; InterlockedExchangePointer((PVOID volatile*)&s_cur, o);
+        s_spk_ent = ent; return o->n / 48000.0;
+    }
+    static Line ln; memset(&ln, 0, sizeof ln); snprintf(ln.path, sizeof ln.path, "%s", rel);
+    const double l = play_line(&ln, gain);
+    if (l > 0.0) s_spk_ent = ent;
+    return l;
+}
 
 
 /* ------------------------------------------------------------------ v1107P face-to-face (F2F) probe
@@ -678,6 +716,8 @@ void gf_dialogue_tick(void)
     __try {
         const uint32_t pl = player();
         if (pl && ((s_pl_gest_end > 0.0 && now_s() > s_pl_gest_end) || (s_pl_stop2 > 0.0 && now_s() > s_pl_stop2))) { stop_layer(pl); s_pl_gest_end = 0.0; s_pl_stop2 = 0.0; }
+        static double s_car_t;   /* E also gets out of a car: that press (and the next 2 s) must not open a talk with the crew member beside the door */
+        if (pl && in_car(pl)) { s_car_t = now_s(); (void)edge(0, s_key); }
         if (!pl || !alive(pl) || in_car(pl) || gf_cutscene_active()) { if (D.st != D_IDLE) end_talk("player busy"); g_gfd_cam_on = 0; return; }
         /* soak test: open on the nearest NPC and walk through the choices */
         if (s_test > 0.0f) { if (s_test_step < 0) { s_test_step = 0; s_test_t = now_s() + s_test; }
@@ -685,7 +725,8 @@ void gf_dialogue_tick(void)
                 if (D.st == D_IDLE && s_test_step == 0) { const uint32_t n = gf_nearest_npc(12.0f); if (n && !is_story(n)) { start_talk(pl, n); s_test_step = 1; } else { s_test_t = now_s() + 2.0; DLOG("[dialogue] test: no NPC within 12 m yet\n"); } }
                 else if (D.st == D_MENU) { static const int seq[6] = { A_HELLO, A_GOSSIP, A_THREAT, A_THREAT, A_THREAT, A_LEAVE }; int ix = 0; for (int q = 0; q < D.nact; q++) if (D.acts[q] == seq[s_test_step - 1]) ix = q; g_gfd_sel = ix; choose(pl, ix); s_test_step++; s_test_t = now_s() + 1.0; }
             } }
-        const int kt = edge(0, s_key);
+        int kt = edge(0, s_key);
+        if (kt && D.st == D_IDLE && now_s() - s_car_t < 2.0) { kt = 0; DLOG("[dialogue] %c right after getting out of a car -> no talk\n", s_key); }
         if (D.st == D_IDLE) {
             speed_track(pl);   /* v1107H */
             /* prompt when someone is close (no shop / menus checked here: the overlay hides it under its own pages) */

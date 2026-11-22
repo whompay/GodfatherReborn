@@ -31,6 +31,8 @@ extern uint8_t* vm_base;
 extern PPU_THREAD_LOCAL ppu_context* g_active_ctx;
 extern PPU_THREAD_LOCAL void (*g_trampoline_fn)(void*);
 extern volatile int g_uiov_menu_open;   /* rsx_ui_overlay.c: one of the port's menus is open */
+/* gf_crewdrive.c: the marker manager + target types, and the slot the crew driver is heading for (its route is shown) */
+volatile uint32_t g_gps_mgr; volatile uint32_t g_gps_ttype[8]; volatile int g_gps_force_slot = -1;
 /* read by rsx_ui_overlay.c (gps_build): the "switch GPS target" hint next to the radar while it is refreshed */
 volatile unsigned long long g_gps_hint_t; volatile int g_gps_key = 'G';
 typedef void (*gfn)(ppu_context*);
@@ -215,6 +217,8 @@ static void resolve_types(uint32_t mgr)
         G.ttype[k] = gcall(G.type_lookup, a, 2, &r) ? (uint32_t)r : 0;
     }
     G.mgr = mgr; G.nids = 0;
+    for (int k = 0; k < NTARGET; k++) g_gps_ttype[k] = G.ttype[k];
+    g_gps_mgr = mgr;
     printf("[gps] marker types: waypoint %08X story %08X job %08X favor %08X\n", G.ttype[0], G.ttype[1], G.ttype[2], G.ttype[3]);
 }
 
@@ -284,6 +288,7 @@ void gf_gps_hud(uint64_t hud64)
         }
         int cur = -1;
         for (int i = 0; i < nc; i++) if (cs[i] == G.sel_slot && G.ttype[ck[i]] == G.sel_type) cur = i;
+        if (g_gps_force_slot >= 0) for (int i = 0; i < nc; i++) if (cs[i] == g_gps_force_slot) cur = i;   /* the crew driver's destination */
         if (cur < 0) {                                             /* automatic: waypoint, else checkpoint, else mission start */
             int pcls = 9;
             for (int i = 0; i < nc; i++) { const int cls = ck[i] == 0 ? 0 : ck[i] <= 4 ? 1 : 2; if (cls < pcls) { pcls = cls; cur = i; } }

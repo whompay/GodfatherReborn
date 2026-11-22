@@ -676,6 +676,7 @@ static void main_tick(void)   /* v1058E: main PPU thread, once per frame */
     gf_shop_tick();   /* v1092S inventory / stores */
     { extern void gf_dialogue_tick(void); gf_dialogue_tick(); }   /* v1106D street dialogue (T) */
     { extern void gf_sit_tick(void); gf_sit_tick(); }   /* v1109C sittable furniture (U) */
+    { extern void gf_crewdrive_tick(void); gf_crewdrive_tick(); }   /* crew "You drive" (B) */
     { extern void gf_pop_car_watch(void); gf_pop_car_watch(); }   /* v1109Y: cars that vanish while on screen (log) */
 }
 static void tr_tick(void)

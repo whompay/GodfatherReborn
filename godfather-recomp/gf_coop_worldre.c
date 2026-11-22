@@ -293,6 +293,12 @@ void gf_world_npc_note(uint32_t ent, uint32_t hash, uint32_t owner, uint32_t req
     if (k < 0) k = (int)(s_nr_i++ % NR_MAX);
     s_nr[k].ent = ent; s_nr[k].vt = vt; s_nr[k].hash = hash; s_nr[k].owner = owner; s_nr[k].req_vt = rv;
 }
+int gf_world_npcs(uint32_t* out, int max)   /* gf_crewdrive.c: the living-or-not NPCs the factory made (cheap, no memory scan) */
+{
+    int n = 0;
+    for (int i = 0; i < NR_MAX && n < max; i++) { uint32_t vt = 0; if (s_nr[i].ent && safe32(s_nr[i].ent, &vt) && vt == s_nr[i].vt) out[n++] = s_nr[i].ent; }
+    return n;
+}
 int gf_world_spawn_info(uint32_t ent, uint32_t* hash, uint32_t* owner, uint32_t* req_vt)   /* 1 = known */
 {
     for (int i = 0; i < NR_MAX; i++) if (s_nr[i].ent == ent && ent) {
